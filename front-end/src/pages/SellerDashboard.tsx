@@ -328,6 +328,8 @@ function ProductsList() {
   const [newProductDesc, setNewProductDesc] = useState('');
   const [newProductPrice, setNewProductPrice] = useState('0');
   const [newProductOriginalPrice, setNewProductOriginalPrice] = useState('');
+  const [newProductDiscount, setNewProductDiscount] = useState('0');
+  const [editProductDiscount, setEditProductDiscount] = useState('0');
   const [newProductType, setNewProductType] = useState('New');
   const [newProductGender, setNewProductGender] = useState('Unisex');
   const [newProductSizes, setNewProductSizes] = useState<Record<string, number>>({ XS: 0, S: 0, M: 0, L: 0, XL: 0 });
@@ -347,6 +349,105 @@ function ProductsList() {
   const [currentPage, setCurrentPage] = useState(0);
   const [itemsPerPage] = useState(10);
   const [totalItems, setTotalItems] = useState(0);
+
+  // Sync edits discount percentages
+  React.useEffect(() => {
+    if (editingProduct) {
+      const orig = Number(editingProduct.originalPrice) || 0;
+      const sale = Number(editingProduct.price) || 0;
+      if (orig > 0 && sale > 0 && orig > sale) {
+        const pct = Math.round(((orig - sale) / orig) * 100);
+        setEditProductDiscount(String(pct));
+      } else {
+        setEditProductDiscount('0');
+      }
+    }
+  }, [editingProduct?.id]);
+
+  // Pricing synchronization helper methods
+  const handleNewOriginalPriceChange = (valStr: string) => {
+    setNewProductOriginalPrice(valStr);
+    const original = Number(valStr) || 0;
+    const discount = Number(newProductDiscount) || 0;
+    if (discount > 0 && original > 0) {
+      const sale = Math.round(original * (1 - discount / 100));
+      setNewProductPrice(String(sale));
+    } else {
+      setNewProductPrice(valStr);
+    }
+  };
+
+  const handleNewDiscountChange = (valStr: string) => {
+    let discount = Number(valStr) || 0;
+    if (discount < 0) discount = 0;
+    if (discount > 100) discount = 100;
+    setNewProductDiscount(String(discount));
+    
+    const original = Number(newProductOriginalPrice) || 0;
+    if (original > 0) {
+      const sale = Math.round(original * (1 - discount / 100));
+      setNewProductPrice(String(sale));
+    }
+  };
+
+  const handleNewSalePriceChange = (valStr: string) => {
+    setNewProductPrice(valStr);
+    const sale = Number(valStr) || 0;
+    const original = Number(newProductOriginalPrice) || 0;
+    if (original > 0 && sale > 0 && original > sale) {
+      const pct = Math.round(((original - sale) / original) * 100);
+      setNewProductDiscount(String(pct));
+    } else {
+      setNewProductDiscount('0');
+    }
+  };
+
+  const handleEditOriginalPriceChange = (valStr: string) => {
+    const original = Number(valStr) || 0;
+    const discount = Number(editProductDiscount) || 0;
+    let sale = editingProduct.price;
+    if (discount > 0 && original > 0) {
+      sale = Math.round(original * (1 - discount / 100));
+    } else {
+      sale = original;
+    }
+    setEditingProduct({
+      ...editingProduct,
+      originalPrice: original > 0 ? original : null,
+      price: sale
+    });
+  };
+
+  const handleEditDiscountChange = (valStr: string) => {
+    let discount = Number(valStr) || 0;
+    if (discount < 0) discount = 0;
+    if (discount > 100) discount = 100;
+    setEditProductDiscount(String(discount));
+
+    const original = Number(editingProduct.originalPrice) || 0;
+    if (original > 0) {
+      const sale = Math.round(original * (1 - discount / 100));
+      setEditingProduct({
+        ...editingProduct,
+        price: sale
+      });
+    }
+  };
+
+  const handleEditSalePriceChange = (valStr: string) => {
+    const sale = Number(valStr) || 0;
+    const original = Number(editingProduct.originalPrice) || 0;
+    if (original > 0 && sale > 0 && original > sale) {
+      const pct = Math.round(((original - sale) / original) * 100);
+      setEditProductDiscount(String(pct));
+    } else {
+      setEditProductDiscount('0');
+    }
+    setEditingProduct({
+      ...editingProduct,
+      price: sale
+    });
+  };
 
   const handleEditImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -491,6 +592,7 @@ function ProductsList() {
         setNewProductDesc('');
         setNewProductPrice('0');
         setNewProductOriginalPrice('');
+        setNewProductDiscount('0');
         setNewProductType('New');
         setNewProductGender('Unisex');
         setNewProductSizes({ XS: 0, S: 0, M: 0, L: 0, XL: 0 });
@@ -586,28 +688,60 @@ function ProductsList() {
                        <p className="text-[10px] font-black uppercase tracking-widest mt-1 text-gray-400">Max 50 characters</p>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-8">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                        <div className="space-y-4">
-                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Sale Price (IDR)</p>
-                          <input 
-                            type="number"
-                            value={newProductPrice}
-                            onChange={(e) => setNewProductPrice(e.target.value)}
-                            placeholder="0"
-                            className="w-full bg-gray-50 border border-gray-100 rounded-[1.5rem] px-8 py-4 outline-none focus:ring-2 focus:ring-black font-black text-sm tracking-tight"
-                          />
-                          <p className="text-[10px] font-black uppercase tracking-widest mt-1 text-gray-400">Numeric only</p>
-                       </div>
-                       <div className="space-y-4">
-                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Original Price (IDR)</p>
+                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest font-sans">Original Price (IDR)</p>
                           <input 
                             type="number"
                             value={newProductOriginalPrice}
-                            onChange={(e) => setNewProductOriginalPrice(e.target.value)}
+                            onChange={(e) => handleNewOriginalPriceChange(e.target.value)}
                             placeholder="0"
                             className="w-full bg-gray-50 border border-gray-100 rounded-[1.5rem] px-8 py-4 outline-none focus:ring-2 focus:ring-black font-black text-sm tracking-tight"
                           />
-                          <p className="text-[10px] font-black uppercase tracking-widest mt-1 text-gray-400">Numeric only; optional</p>
+                          <p className="text-[10px] font-black uppercase tracking-widest mt-1 text-gray-400">Base price before discount</p>
+                       </div>
+
+                       <div className="space-y-4">
+                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest font-sans">Discount (%)</p>
+                          <div className="flex gap-4">
+                             <input 
+                               type="number"
+                               min="0"
+                               max="100"
+                               value={newProductDiscount}
+                               onChange={(e) => handleNewDiscountChange(e.target.value)}
+                               placeholder="0"
+                               className="w-20 bg-gray-50 border border-gray-100 rounded-[1.5rem] px-4 py-4 outline-none focus:ring-2 focus:ring-black font-black text-sm tracking-tight text-center"
+                             />
+                             <div className="flex-1 flex gap-2">
+                                {[10, 20, 30, 50].map((pct) => (
+                                  <button
+                                    key={pct}
+                                    type="button"
+                                    onClick={() => handleNewDiscountChange(String(pct))}
+                                    className={cn(
+                                      "flex-1 rounded-[1rem] text-[10px] font-bold transition-all border border-gray-100",
+                                      Number(newProductDiscount) === pct ? "bg-black text-white" : "bg-white text-gray-500 hover:border-black"
+                                    )}
+                                  >
+                                    {pct}%
+                                  </button>
+                                ))}
+                             </div>
+                          </div>
+                          <p className="text-[10px] font-black uppercase tracking-widest mt-1 text-gray-400">Discount</p>
+                       </div>
+
+                       <div className="space-y-4">
+                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest font-sans">Sale Price (IDR)</p>
+                          <input 
+                            type="number"
+                            value={newProductPrice}
+                            onChange={(e) => handleNewSalePriceChange(e.target.value)}
+                            placeholder="0"
+                            className="w-full bg-gray-50 border border-gray-100 rounded-[1.5rem] px-8 py-4 outline-none focus:ring-2 focus:ring-black font-black text-sm tracking-tight"
+                          />
+                          <p className="text-[10px] font-black uppercase tracking-widest mt-1 text-gray-400">Final sale price</p>
                        </div>
                     </div>
 
@@ -901,26 +1035,60 @@ function ProductsList() {
                            <p className="text-[10px] font-black uppercase tracking-widest mt-1 text-gray-400">Max 50 characters</p>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-8">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                            <div className="space-y-4">
-                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Sale Price (IDR)</p>
+                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest font-sans">Original Price (IDR)</p>
                               <input 
                                 type="number"
-                                defaultValue={editingProduct.price}
-                                onChange={(e) => setEditingProduct({ ...editingProduct, price: Number(e.target.value) })}
+                                value={editingProduct.originalPrice || ''}
+                                onChange={(e) => handleEditOriginalPriceChange(e.target.value)}
+                                placeholder="0"
                                 className="w-full bg-gray-50 border border-gray-100 rounded-[1.5rem] px-8 py-4 outline-none focus:ring-2 focus:ring-black font-black text-sm tracking-tight"
                               />
-                              <p className="text-[10px] font-black uppercase tracking-widest mt-1 text-gray-400">Numeric only</p>
+                              <p className="text-[10px] font-black uppercase tracking-widest mt-1 text-gray-400">Original price</p>
                            </div>
+
                            <div className="space-y-4">
-                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Original Price (IDR)</p>
+                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest font-sans">Discount (%)</p>
+                              <div className="flex gap-4">
+                                 <input 
+                                   type="number"
+                                   min="0"
+                                   max="100"
+                                   value={editProductDiscount}
+                                   onChange={(e) => handleEditDiscountChange(e.target.value)}
+                                   placeholder="0"
+                                   className="w-20 bg-gray-50 border border-gray-100 rounded-[1.5rem] px-4 py-4 outline-none focus:ring-2 focus:ring-black font-black text-sm tracking-tight text-center"
+                                 />
+                                 <div className="flex-1 flex gap-2">
+                                    {[10, 20, 30, 50].map((pct) => (
+                                      <button
+                                        key={pct}
+                                        type="button"
+                                        onClick={() => handleEditDiscountChange(String(pct))}
+                                        className={cn(
+                                          "flex-1 rounded-[1rem] text-[10px] font-bold transition-all border border-gray-100",
+                                          Number(editProductDiscount) === pct ? "bg-black text-white" : "bg-white text-gray-500 hover:border-black"
+                                        )}
+                                      >
+                                        {pct}%
+                                      </button>
+                                    ))}
+                                 </div>
+                              </div>
+                              <p className="text-[10px] font-black uppercase tracking-widest mt-1 text-gray-400">Discount</p>
+                           </div>
+
+                           <div className="space-y-4">
+                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest font-sans">Sale Price (IDR)</p>
                               <input 
                                 type="number"
-                                defaultValue={editingProduct.originalPrice || ''}
-                                onChange={(e) => setEditingProduct({ ...editingProduct, originalPrice: e.target.value ? Number(e.target.value) : null })}
+                                value={editingProduct.price || ''}
+                                onChange={(e) => handleEditSalePriceChange(e.target.value)}
+                                placeholder="0"
                                 className="w-full bg-gray-50 border border-gray-100 rounded-[1.5rem] px-8 py-4 outline-none focus:ring-2 focus:ring-black font-black text-sm tracking-tight"
                               />
-                              <p className="text-[10px] font-black uppercase tracking-widest mt-1 text-gray-400">Numeric only; optional</p>
+                              <p className="text-[10px] font-black uppercase tracking-widest mt-1 text-gray-400">Final sale price</p>
                            </div>
                         </div>
 
