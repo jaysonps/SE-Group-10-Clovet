@@ -315,9 +315,37 @@ router.put("/products/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { name, description, category, price, originalPrice, image, condition, gender, sizes } = req.body;
+
+    // Check current status and sizes to determine if there is stock addition
+    const currentProdCheck = await pool.query("SELECT status, sizes FROM products WHERE id = $1", [id]);
+    if (currentProdCheck.rows.length === 0) {
+      return res.status(404).json({ error: "Product not found" });
+    }
+    const currentProduct = currentProdCheck.rows[0];
+    const currentStatus = currentProduct.status || 'PENDING';
+
+    let currentSizes = typeof currentProduct.sizes === 'string' ? JSON.parse(currentProduct.sizes) : currentProduct.sizes;
+    if (!currentSizes) {
+      currentSizes = {};
+    }
+
+    let hasStockIncrease = false;
+    if (sizes) {
+      for (const sizeKey of Object.keys(sizes)) {
+        const newStock = Number(sizes[sizeKey]) || 0;
+        const oldStock = Number(currentSizes[sizeKey]) || 0;
+        if (newStock > oldStock) {
+          hasStockIncrease = true;
+          break;
+        }
+      }
+    }
+
+    const nextStatus = hasStockIncrease ? 'PENDING' : currentStatus;
+
     const result = await pool.query(
-      "UPDATE products SET name = $1, description = $2, category = $3, price = $4, original_price = $5, image = $6, condition = $7, gender = $8, sizes = $9, status = 'PENDING' WHERE id = $10 RETURNING *, original_price as \"originalPrice\"",
-      [name, description, category, price, originalPrice || null, image, condition, gender || 'Unisex', JSON.stringify(sizes), id]
+      "UPDATE products SET name = $1, description = $2, category = $3, price = $4, original_price = $5, image = $6, condition = $7, gender = $8, sizes = $9, status = $10 WHERE id = $11 RETURNING *, original_price as \"originalPrice\"",
+      [name, description, category, price, originalPrice || null, image, condition, gender || 'Unisex', JSON.stringify(sizes), nextStatus, id]
     );
     res.json(result.rows[0]);
   } catch (error) {
