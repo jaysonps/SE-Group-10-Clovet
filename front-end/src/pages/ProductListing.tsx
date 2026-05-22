@@ -113,6 +113,11 @@ export default function ProductListing() {
     setVisibleCount(12); // Reset visible count on filter change
   }, [categoryParam, sortParam, filterParam]);
 
+  // Reset visible count when sort changes
+  React.useEffect(() => {
+    setVisibleCount(12);
+  }, [sortBy]);
+
   const toggleFilter = (filter: string) => {
     setActiveFilters(prev => {
       const newFilters = prev.includes(filter) ? prev.filter(f => f !== filter) : [...prev, filter];
@@ -174,7 +179,24 @@ export default function ProductListing() {
     });
   });
 
-  const displayedProducts = filteredProducts.slice(0, visibleCount);
+  // Apply sorting to filtered products
+  const sortedProducts = [...filteredProducts].sort((a, b) => {
+    switch (sortBy) {
+      case 'Price: Low to High':
+        return Number(a.price) - Number(b.price);
+      case 'Price: High to Low':
+        return Number(b.price) - Number(a.price);
+      case 'Release Date':
+        // Assuming newer products have higher IDs or you can add a created_at field
+        return Number(b.id) - Number(a.id);
+      case 'Featured Items':
+      default:
+        // Keep original order for Featured Items
+        return 0;
+    }
+  });
+
+  const displayedProducts = sortedProducts.slice(0, visibleCount);
 
   return (
     <div className="bg-white min-h-screen">
