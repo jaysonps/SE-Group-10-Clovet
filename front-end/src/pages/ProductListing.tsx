@@ -113,11 +113,6 @@ export default function ProductListing() {
     setVisibleCount(12); // Reset visible count on filter change
   }, [categoryParam, sortParam, filterParam]);
 
-  // Reset visible count when sort changes
-  React.useEffect(() => {
-    setVisibleCount(12);
-  }, [sortBy]);
-
   const toggleFilter = (filter: string) => {
     setActiveFilters(prev => {
       const newFilters = prev.includes(filter) ? prev.filter(f => f !== filter) : [...prev, filter];
@@ -179,21 +174,19 @@ export default function ProductListing() {
     });
   });
 
-  // Apply sorting to filtered products
   const sortedProducts = [...filteredProducts].sort((a, b) => {
-    switch (sortBy) {
-      case 'Price: Low to High':
-        return Number(a.price) - Number(b.price);
-      case 'Price: High to Low':
-        return Number(b.price) - Number(a.price);
-      case 'Release Date':
-        // Assuming newer products have higher IDs or you can add a created_at field
-        return Number(b.id) - Number(a.id);
-      case 'Featured Items':
-      default:
-        // Keep original order for Featured Items
-        return 0;
+    if (sortBy === 'Price: Low to High') {
+      return Number(a.price) - Number(b.price);
     }
+    if (sortBy === 'Price: High to Low') {
+      return Number(b.price) - Number(a.price);
+    }
+    if (sortBy === 'Release Date') {
+      const aVal = a.created_at ? new Date(a.created_at).getTime() : (parseInt(a.id) || 0);
+      const bVal = b.created_at ? new Date(b.created_at).getTime() : (parseInt(b.id) || 0);
+      return bVal - aVal;
+    }
+    return 0; // Featured Items / Default order
   });
 
   const displayedProducts = sortedProducts.slice(0, visibleCount);
@@ -487,7 +480,7 @@ export default function ProductListing() {
                </div>
              )}
 
-             {!isLoading && visibleCount < filteredProducts.length && (
+             {!isLoading && visibleCount < sortedProducts.length && (
                <div className="mt-20 flex justify-center">
                   <button 
                     onClick={() => setVisibleCount(prev => prev + 12)}
@@ -498,7 +491,7 @@ export default function ProductListing() {
                </div>
              )}
 
-             {!isLoading && filteredProducts.length === 0 && (
+             {!isLoading && sortedProducts.length === 0 && (
                <div className="mt-20 text-center py-20 bg-gray-50 rounded-[3rem] border border-dashed border-gray-200">
                  <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">No verified products available in the vault.</p>
                </div>

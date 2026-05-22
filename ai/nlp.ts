@@ -1,38 +1,35 @@
-import { exec } from "child_process";
-import path from "path";
-import util from "util";
-
-const execPromise = util.promisify(exec);
-
 export const analyzeProductCategory = async (name: string, description: string): Promise<string[]> => {
-  const pythonPath = process.env.PYTHON_PATH || (process.platform === "win32" ? "python" : "python3");
-  const scriptPath = path.join(process.cwd(), "ai", "classifier.py");
+  const text = (name + " " + description).toLowerCase();
+  const found: string[] = [];
   
-  // Escape arguments for shell execution
-  const escapedName = name.replace(/"/g, '\\"');
-  const escapedDescription = description.replace(/"/g, '\\"');
-  
-  try {
-    const { stdout, stderr } = await execPromise(`${pythonPath} "${scriptPath}" "${escapedName}" "${escapedDescription}"`);
-    
-    if (stderr && !stdout) {
-      console.error("Python execution error:", stderr);
-      throw new Error(`Python error: ${stderr}`);
-    }
-    
-    try {
-      const categories = JSON.parse(stdout.trim());
-      if (!Array.isArray(categories)) {
-        throw new Error("Invalid output format from Python script");
+  const mappings: Record<string, string[]> = {
+    "Tops": ["shirt", "t-shirt", "tee", "top", "blouse", "tank", "jersey", "polo"],
+    "Outerwears": ["jacket", "coat", "blazer", "outer", "parka", "windbreaker", "denim jacket", "cardigan"],
+    "Bottoms": ["pants", "trousers", "jeans", "shorts", "skirt", "leggings", "cargo", "denim pants"],
+    "Knitwears & Fleeces": ["sweater", "hoodie", "knit", "fleece", "pullover", "cardigan", "sweatshirt"],
+    "Dresses & Suits": ["dress", "suit", "gown", "tuxedo", "formal", "maxi", "mini dress"]
+  };
+
+  for (const [category, keywords] of Object.entries(mappings)) {
+    for (const keyword of keywords) {
+      const escapedKeyword = keyword.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      const regex = new RegExp(`\\b${escapedKeyword}\\b`, 'i');
+      if (regex.test(text)) {
+        if (!found.includes(category)) {
+          found.push(category);
+        }
+        break;
       }
-      return categories;
-    } catch (parseError) {
-      console.error("Failed to parse Python output:", stdout);
-      throw new Error("Failed to parse AI classification result");
     }
-  } catch (error) {
-    console.error("Failed to execute Python NLP script:", error);
-    // Fallback to a basic classification if python fails (for dev resilience)
-    return ["Tops"];
   }
+
+  if (found.length === 0) {
+    if (text.includes("wear")) {
+      found.push("Tops");
+    } else {
+      found.push("Tops");
+    }
+  }
+
+  return found.slice(0, 3);
 };

@@ -167,14 +167,14 @@ export const initDb = async () => {
     if (parseInt(productCountResult.rows[0].count) === 0) {
       console.log("Seeding mock products...");
       const mockProducts = [
-        { name: 'Green T-Shirt', category: 'Tops', price: 150000, original_price: 300000, image: '/src/assets/tops1.PNG', status: 'VERIFIED', description: 'Premium cotton essentials.', gender: 'Unisex' },
+        { name: 'Green T-Shirt', category: 'Tops', price: 150000, original_price: 300000, image: '/src/assets/tops1.PNG', status: 'VERIFIED', description: 'Premium cotton essentials.', gender: 'Men' },
         { name: 'Colorblock Polo Shirt', category: 'Tops', price: 185000, original_price: 370000, image: '/src/assets/tops2.PNG', status: 'VERIFIED', description: 'Modern polo with color accents.', gender: 'Unisex' },
         { name: 'Black Cropped Tee', category: 'Tops', price: 125000, original_price: 250000, image: '/src/assets/tops3.PNG', status: 'VERIFIED', description: 'Trendy cropped fit.', gender: 'Women' },
         { name: 'Black Cargo Pants', category: 'Bottoms', price: 350000, image: '/src/assets/bottoms1.PNG', status: 'VERIFIED', description: 'Durable and stylish cargo pants.', gender: 'Men' },
         { name: 'Light Blue Jeans', category: 'Bottoms', price: 295000, image: '/src/assets/bottoms2.PNG', status: 'VERIFIED', description: 'Classic light wash jeans.', gender: 'Unisex' },
-        { name: 'Broken White Pants', category: 'Bottoms', price: 275000, image: '/src/assets/bottoms3.PNG', status: 'VERIFIED', description: 'Elegant off-white trousers.', gender: 'Unisex' },
+        { name: 'Broken White Pants', category: 'Bottoms', price: 275000, image: '/src/assets/bottoms3.PNG', status: 'VERIFIED', description: 'Elegant off-white trousers.', gender: 'Women' },
         { name: 'Sleeveless Black Dress', category: 'Dresses & Suits', price: 450000, image: '/src/assets/dresses1.PNG', status: 'VERIFIED', description: 'Elegant evening dress.', gender: 'Women' },
-        { name: 'Graphic Red T-Shirt', category: 'Tops', price: 195000, image: '/src/assets/Graphic Red T-shirts.PNG', status: 'VERIFIED', description: 'Bold graphic design tee.', gender: 'Women' },
+        { name: 'Graphic Red T-Shirt', category: 'Tops', price: 195000, image: '/src/assets/Graphic Red T-shirts.PNG', status: 'VERIFIED', description: 'Bold graphic design tee.', gender: 'Unisex' },
         { name: 'Black Overall Dress', category: 'Dresses & Suits', price: 385000, image: '/src/assets/dresses3.PNG', status: 'VERIFIED', description: 'Versatile overall dress.', gender: 'Women' },
         { name: 'Beige Fleece Jacket', category: 'Knitwears & Fleeces', price: 260000, original_price: 520000, image: '/src/assets/fleeces1.PNG', status: 'VERIFIED', description: 'Warm and cozy fleece.', gender: 'Unisex' },
         { name: 'Navy Fleece Jacket', category: 'Knitwears & Fleeces', price: 260000, original_price: 520000, image: '/src/assets/fleeces2.PNG', status: 'VERIFIED', description: 'Classic navy fleece.', gender: 'Unisex' },
@@ -185,9 +185,9 @@ export const initDb = async () => {
         { name: 'Black Varsity Jacket', category: 'Outerwears', price: 750000, image: '/src/assets/Outwears1.PNG', status: 'PENDING', description: 'Classic varsity style.', gender: 'Men' },
         { name: 'Olive Coach Jacket', category: 'Outerwears', price: 485000, image: '/src/assets/Outwears2.PNG', status: 'PENDING', description: 'Casual olive outer layer.', gender: 'Men' },
         { name: 'Navy Colorblock Windbreaker', category: 'Outerwears', price: 510000, image: '/src/assets/Outwears3.PNG', status: 'PENDING', description: 'Lightweight windbreaker.', gender: 'Unisex' },
-        { name: 'Black Blazer Set', category: 'Dresses & Suits', price: 950000, image: '/src/assets/Suits1.PNG', status: 'VERIFIED', description: 'Professional blazer set.', gender: 'Men' },
+        { name: 'Black Blazer Set', category: 'Dresses & Suits', price: 950000, image: '/src/assets/Suits1.PNG', status: 'VERIFIED', description: 'Professional blazer set.', gender: 'Women' },
         { name: 'Classic Black Suit', category: 'Dresses & Suits', price: 1250000, image: '/src/assets/Suits2.PNG', status: 'VERIFIED', description: 'Formal black suit.', gender: 'Men' },
-        { name: 'Beige Blazer Set', category: 'Dresses & Suits', price: 920000, image: '/src/assets/Suits3.PNG', status: 'VERIFIED', description: 'Modern beige suit set.', gender: 'Men' }
+        { name: 'Beige Blazer Set', category: 'Dresses & Suits', price: 920000, image: '/src/assets/Suits3.PNG', status: 'VERIFIED', description: 'Modern beige suit set.', gender: 'Women' }
       ];
 
       for (const p of mockProducts) {
