@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Lock, ShoppingBag, LogOut, Camera, Star, ChevronRight, X, CheckCircle, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { User, Lock, ShoppingBag, LogOut, Camera, Star, ChevronRight, X, CheckCircle, ArrowLeft, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
@@ -46,15 +46,19 @@ const ORDERS = [
 ];
 
 export default function Profile() {
-  const { logout, user, login } = useAuth();
+  const { logout, user, login, token } = useAuth();
   const navigate = useNavigate();
   
   const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'orders'>('profile');
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
-  const [username, setUsername] = useState(user?.username || 'customer');
-  const [firstName, setFirstName] = useState(user?.firstName || user?.name?.split(' ')[0] || 'customer');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [username, setUsername] = useState(user?.username || 'CUST001');
+  const [firstName, setFirstName] = useState(user?.firstName || user?.name?.split(' ')[0] || 'Customer');
   const [lastName, setLastName] = useState(user?.lastName || user?.name?.split(' ')[1] || '');
   const [email, setEmail] = useState(user?.email || 'customer@gmail.com');
   const [phone, setPhone] = useState(user?.phone || '');
@@ -66,14 +70,17 @@ export default function Profile() {
   const [rating, setRating] = useState(0);
   const [hover, setHover] = useState(0);
   const [review, setReview] = useState('');
-  const [notification, setNotification] = useState<{ message: string, visible: boolean, type?: 'success' | 'error' }>({ message: '', visible: false });
+  const [notification, setNotification] = useState<{ message: string, visible: boolean, type?: 'success' | 'warning' }>({ message: '', visible: false, type: 'success' });
   const [dbOrders, setDbOrders] = useState<any[]>([]);
   const [isLoadingOrders, setIsLoadingOrders] = useState(true);
 
-  // Sync with DB on mount and when tab changes to profile
   React.useEffect(() => {
     if (user?.id) {
-       fetch(`/api/users/${user.id}`)
+       fetch(`/api/users/${user.id}`, {
+         headers: {
+           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+         }
+       })
         .then(res => res.json())
         .then(data => {
           if (!data.error) {
@@ -85,50 +92,76 @@ export default function Profile() {
             // Update context if DB has newer data
             const updatedUser = { ...user, ...data, name: `${data.firstName} ${data.lastName}`.trim() };
             if (JSON.stringify(updatedUser) !== JSON.stringify(user)) {
-               login(updatedUser);
+               login({ ...updatedUser, token: token! });
             }
           }
         })
         .catch(console.error);
     }
-  }, [user?.id]);
+  }, [user?.id, token]);
+
+  const fetchOrders = () => {
+    setIsLoadingOrders(true);
+    fetch('/api/orders?limit=100', {
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      }
+    })
+      .then(res => res.json())
+      .then(data => {
+        const ordersList = data.orders || [];
+        const mapped = ordersList.map((o: any) => {
+          let readableStatus = o.status;
+          if (o.status === 'SUBMITTED') {
+            readableStatus = 'Submitted (Awaiting Payment)';
+          } else if (o.status === 'PAID') {
+            readableStatus = 'Processing (Awaiting Seller Ship)';
+          } else if (o.status === 'IN_VERIFICATION') {
+            readableStatus = 'In Verification Center';
+          } else if (o.status === 'SHIPPED') {
+            readableStatus = 'Shipped';
+          } else if (o.status === 'DELIVERED') {
+            readableStatus = 'Delivered';
+          } else if (o.status === 'COMPLETED') {
+            readableStatus = 'Completed';
+          } else if (o.status === 'REJECTED') {
+            readableStatus = 'Rejected (Counterfeit Alert!)';
+          } else if (o.status === 'REFUNDED') {
+            readableStatus = 'Refunded';
+          } else if (o.status === 'EXPIRED') {
+            readableStatus = 'Expired (Payment Timeout)';
+          }
+
+          return {
+            id: `ORD-${o.id}`,
+            rawId: o.id,
+            productId: o.product_id,
+            tracking_number: o.tracking_number,
+            date: new Date(o.created_at).toLocaleDateString(),
+            status: readableStatus,
+            verification_notes: o.verification_notes,
+            verification_evidence_image: o.verification_evidence_image,
+            reviewed: o.review_id ? true : false,
+            reviewRating: o.review_rating,
+            reviewComment: o.review_comment,
+            items: [{
+              name: o.product_name,
+              price: Number(o.total_amount),
+              size: 'M', 
+              condition: o.condition || 'New',
+              image: o.product_image
+            }]
+          };
+        });
+        setDbOrders(mapped);
+        setIsLoadingOrders(false);
+      })
+      .catch(() => setIsLoadingOrders(false));
+  };
 
   React.useEffect(() => {
     if (activeTab === 'orders') {
-      fetch('/api/orders?limit=100')
-        .then(res => res.json())
-        .then(data => {
-          const ordersList = data.orders || [];
-          const mapped = ordersList.map((o: any) => {
-            let readableStatus = o.status;
-            if (o.status === 'PAID') {
-              readableStatus = 'Processing (Awaiting Seller Ship)';
-            } else if (o.status === 'IN_VERIFICATION') {
-              readableStatus = 'In Verification Center';
-            } else if (o.status === 'SHIPPED') {
-              readableStatus = 'Verified & Shipping';
-            } else if (o.status === 'REJECTED') {
-              readableStatus = 'Rejected (Counterfeit Alert!)';
-            }
-
-            return {
-              id: `ORD-${o.id}`,
-              date: new Date(o.created_at).toLocaleDateString(),
-              status: readableStatus,
-              reviewed: false,
-              items: [{
-                name: o.product_name,
-                price: Number(o.total_amount),
-                size: 'M', 
-                condition: o.status === 'SHIPPED' ? 'AUTHENTIC' : o.status === 'REJECTED' ? 'COUNTERFEIT' : 'Pending Verification',
-                image: o.product_image
-              }]
-            };
-          });
-          setDbOrders(mapped);
-          setIsLoadingOrders(false);
-        })
-        .catch(() => setIsLoadingOrders(false));
+      fetchOrders();
     }
   }, [activeTab]);
 
@@ -143,13 +176,13 @@ export default function Profile() {
       // Image validation based on SRS Page 25
       const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
       if (!allowedTypes.includes(file.type)) {
-        triggerNotification('File format must be an image (JPEG, JPG, or PNG)');
+        triggerNotification('File format must be an image (JPEG, JPG, or PNG)', 'warning');
         return;
       }
       
       const maxSize = 5 * 1024 * 1024; // 5MB
       if (file.size > maxSize) {
-        triggerNotification('Maximum file size is 5MB');
+        triggerNotification('Maximum file size is 5MB', 'warning');
         return;
       }
 
@@ -169,30 +202,110 @@ export default function Profile() {
   };
 
   const handlePublishReview = () => {
-    setShowReviewModal(false);
-    setRating(0);
-    setReview('');
-    triggerNotification('Review published successfully!');
+    if (!selectedOrder) return;
+
+    fetch('/api/reviews', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({
+        product_id: selectedOrder.productId,
+        order_id: selectedOrder.rawId,
+        rating: rating,
+        comment: review,
+        customer_id: user?.id,
+        user_name: user?.username || `${firstName} ${lastName}`.trim() || 'Customer'
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.error) {
+        triggerNotification(data.error, 'warning');
+      } else {
+        triggerNotification('Review published successfully!', 'success');
+        setShowReviewModal(false);
+        setRating(0);
+        setReview('');
+        fetchOrders();
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      triggerNotification('Failed to publish review', 'warning');
+    });
   };
 
   const openReviewModal = (order: any) => {
     setSelectedOrder(order);
+    if (order.reviewed) {
+      setRating(order.reviewRating);
+      setReview(order.reviewComment);
+    } else {
+      setRating(0);
+      setReview('');
+    }
     setShowReviewModal(true);
   };
 
-  const triggerNotification = (message: string) => {
-    setNotification({ message, visible: true });
-    setTimeout(() => setNotification({ message, visible: false }), 3000);
+  const triggerNotification = (message: string, type: 'success' | 'warning' = 'success') => {
+    setNotification({ message, visible: true, type });
+    setTimeout(() => setNotification({ message, visible: false, type }), 3000);
   };
 
-  const handlePasswordChange = () => {
-    triggerNotification('Credentials Rotated Successfully');
+  const handlePasswordChange = async () => {
+    if (!currentPassword) {
+      triggerNotification('Please enter your current password', 'warning');
+      return;
+    }
+    if (!newPassword) {
+      triggerNotification('Please enter a new password', 'warning');
+      return;
+    }
+    if (newPassword.length < 6) {
+      triggerNotification('New password must be at least 6 characters', 'warning');
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      triggerNotification('New passwords do not match', 'warning');
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+    try {
+      const response = await fetch(`/api/users/${user?.id}/change-password`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok || data.error) {
+        triggerNotification(data.error || 'Failed to update password', 'warning');
+      } else {
+        triggerNotification('Password updated successfully!', 'success');
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmNewPassword('');
+      }
+    } catch (err) {
+      console.error(err);
+      triggerNotification('Connection error while updating password', 'warning');
+    } finally {
+      setIsUpdatingPassword(false);
+    }
   };
 
   const handleProfileUpdate = async () => {
     const newErrors: Record<string, string> = {};
     
-    // Username validation based on SRS Page 10/25
     const usernameRegex = /^[a-zA-Z0-9]{4,20}$/;
     if (!username || !usernameRegex.test(username)) {
       newErrors.username = 'Username should contain alphanumeric, 4-20 characters, without spaces';
@@ -228,7 +341,10 @@ export default function Profile() {
     try {
       const response = await fetch(`/api/users/${user?.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           username,
           firstName,
@@ -243,11 +359,11 @@ export default function Profile() {
       }
 
       const updatedData = await response.json();
-      login({ ...user, ...updatedData, name: `${updatedData.firstName} ${updatedData.lastName}`.trim() });
-      triggerNotification('Profile updated successfully');
+      login({ ...user, ...updatedData, name: `${updatedData.firstName} ${updatedData.lastName}`.trim(), token: token! });
+      triggerNotification('Profile updated successfully', 'success');
     } catch (error) {
        console.error('Update profile error:', error);
-       triggerNotification('Failed to update profile. Please check your connection.');
+       triggerNotification('Failed to update profile. Please check your connection.', 'warning');
     } finally {
       setIsUpdating(false);
     }
@@ -264,8 +380,8 @@ export default function Profile() {
                     <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
                   </div>
                   <div className="space-y-1">
-                    <h2 className="text-2xl font-display font-black tracking-tighter uppercase">{user?.name || 'Cust001'}</h2>
-                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em]">{user?.email || 'cust001@gmail.com'}</p>
+                    <h2 className="text-2xl font-display font-black tracking-tighter uppercase">{user?.username || user?.name || 'CUST001'}</h2>
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em]">{user?.email || 'customer@gmail.com'}</p>
                   </div>
                </div>
                
@@ -415,72 +531,79 @@ export default function Profile() {
                   </div>
                 )}
 
-                {activeTab === 'password' && (
+                 {activeTab === 'password' && (
                   <div className="space-y-12">
                     <div className="space-y-2">
-                      <h1 className="text-4xl font-display font-black tracking-tighter uppercase leading-tight">Reset Password</h1>
-                      <p className="sleek-label opacity-40">Encryption and password management</p>
+                       <h1 className="text-4xl font-display font-black tracking-tighter uppercase leading-tight">Reset Password</h1>
+                       <p className="sleek-label opacity-40">Encryption and password management</p>
                     </div>
                     <div className="max-w-md space-y-8 pt-8">
-                      <div className="space-y-2">
-                         <label className="sleek-label text-black">Current Password</label>
-                         <div className="relative">
-                           <input 
-                             type={showCurrentPassword ? "text" : "password"} 
-                             placeholder="••••••••"  
-                             className="sleek-input pr-12" 
-                           />
-                           <button
-                             type="button"
-                             onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                             className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black transition-colors"
-                           >
-                             {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                           </button>
-                         </div>
-                      </div>
-                      <div className="space-y-2">
-                         <label className="sleek-label text-black">New Password</label>
-                         <div className="relative">
-                           <input 
-                             type={showNewPassword ? "text" : "password"} 
-                             placeholder="••••••••"  
-                             className="sleek-input pr-12" 
-                           />
-                           <button
-                             type="button"
-                             onClick={() => setShowNewPassword(!showNewPassword)}
-                             className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black transition-colors"
-                           >
-                             {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                           </button>
-                         </div>
-                      </div>
-                      <div className="space-y-2">
-                         <label className="sleek-label text-black">Confirm New Password</label>
-                         <div className="relative">
-                           <input 
-                             type={showConfirmNewPassword ? "text" : "password"} 
-                             placeholder="••••••••"  
-                             className="sleek-input pr-12" 
-                           />
-                           <button
-                             type="button"
-                             onClick={() => setShowConfirmNewPassword(!showConfirmNewPassword)}
-                             className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black transition-colors"
-                           >
-                             {showConfirmNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                           </button>
-                         </div>
-                      </div>
-                      <div className="pt-4">
-                         <button 
-                          onClick={handlePasswordChange}
-                          className="sleek-button-primary px-12 py-5 text-sm uppercase tracking-widest w-full md:w-auto"
-                         >
-                           Update Password
-                         </button>
-                      </div>
+                       <div className="space-y-2">
+                          <label className="sleek-label text-black">Current Password</label>
+                          <div className="relative">
+                            <input 
+                              type={showCurrentPassword ? "text" : "password"} 
+                              placeholder="••••••••"  
+                              value={currentPassword}
+                              onChange={(e) => setCurrentPassword(e.target.value)}
+                              className="sleek-input pr-12" 
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black transition-colors"
+                            >
+                              {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
+                          </div>
+                       </div>
+                       <div className="space-y-2">
+                          <label className="sleek-label text-black">New Password</label>
+                          <div className="relative">
+                            <input 
+                              type={showNewPassword ? "text" : "password"} 
+                              placeholder="••••••••"  
+                              value={newPassword}
+                              onChange={(e) => setNewPassword(e.target.value)}
+                              className="sleek-input pr-12" 
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowNewPassword(!showNewPassword)}
+                              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black transition-colors"
+                            >
+                              {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
+                          </div>
+                       </div>
+                       <div className="space-y-2">
+                          <label className="sleek-label text-black">Confirm New Password</label>
+                          <div className="relative">
+                            <input 
+                              type={showConfirmNewPassword ? "text" : "password"} 
+                              placeholder="••••••••"  
+                              value={confirmNewPassword}
+                              onChange={(e) => setConfirmNewPassword(e.target.value)}
+                              className="sleek-input pr-12" 
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowConfirmNewPassword(!showConfirmNewPassword)}
+                              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black transition-colors"
+                            >
+                              {showConfirmNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
+                          </div>
+                       </div>
+                       <div className="pt-4">
+                          <button 
+                           onClick={handlePasswordChange}
+                           disabled={isUpdatingPassword}
+                           className="sleek-button-primary px-12 py-5 text-sm uppercase tracking-widest w-full md:w-auto disabled:opacity-50"
+                          >
+                            {isUpdatingPassword ? 'Updating...' : 'Update Password'}
+                          </button>
+                       </div>
                     </div>
                   </div>
                 )}
@@ -533,28 +656,71 @@ export default function Profile() {
                                                   <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-md text-[9px] font-black uppercase">{item.condition}</span>
                                                </div>
                                             </div>
-                                            <button 
-                                              onClick={() => openReviewModal(item)}
-                                              className="text-[10px] font-black uppercase tracking-widest text-emerald-500 hover:text-black transition-colors"
-                                            >
-                                              Give Review
-                                            </button>
+                                             {/* REQ-F7-1: Review only allowed for COMPLETED orders */}
+                                             {order.status.toLowerCase() === 'completed' ? (
+                                               <button
+                                                 onClick={() => openReviewModal(order)}
+                                                 className="text-[10px] font-black uppercase tracking-widest text-emerald-500 hover:text-black transition-colors"
+                                               >
+                                                 {order.reviewed ? 'View Review' : 'Give Review'}
+                                               </button>
+                                             ) : (order.status.toLowerCase() === 'shipped' || order.status.toLowerCase() === 'delivered') ? (
+                                               <span className="text-[10px] font-black uppercase tracking-widest text-gray-300 cursor-not-allowed">
+                                                 Review Locked (Pending Completion)
+                                               </span>
+                                             ) : null}
                                          </div>
                                       </div>
                                    </div>
                                  ))}
                               </div>
 
-                              <div className="flex flex-col md:flex-row items-center justify-between gap-8 pt-8 border-t border-gray-50">
+                              {order.status.includes("Rejected") && (
+                                <div className="p-6 bg-red-50 border border-red-100 rounded-2xl space-y-4 font-sans max-w-2xl">
+                                  <p className="text-[10px] font-black text-red-500 uppercase tracking-widest">
+                                    Verifier Inspection Feedback
+                                  </p>
+                                  <p className="text-xs font-bold leading-relaxed text-red-900 whitespace-pre-wrap">
+                                    "{order.verification_notes || "No descriptive evidence documented by verifier."}"
+                                  </p>
+                                  {order.verification_evidence_image && (
+                                    <div className="aspect-video max-w-sm rounded-[1rem] overflow-hidden border border-red-100/50 shadow-inner">
+                                      <img
+                                        src={order.verification_evidence_image}
+                                        alt="Inspection Evidence Proof"
+                                        className="w-full h-full object-cover"
+                                        referrerPolicy="no-referrer"
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pt-8 border-t border-gray-50 w-full font-sans">
                                  <div className="flex items-center space-x-4">
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</p>
                                     <div className={cn(
                                       "inline-flex px-6 py-2 text-[10px] font-black rounded-full uppercase tracking-widest shadow-lg",
-                                      order.status.includes('Rejected') ? "bg-red-500 text-white" : order.status.includes('Verification') ? "bg-neutral-850 text-white" : order.status.includes('Verified') ? "bg-emerald-500 text-white" : "bg-amber-500 text-white"
+                                      order.status.toLowerCase().includes('rejected') ? "bg-red-500 text-white" :
+                                      order.status.toLowerCase().includes('refunded') ? "bg-red-400 text-white" :
+                                      order.status.toLowerCase().includes('expired') ? "bg-gray-400 text-white" :
+                                      order.status.toLowerCase() === 'completed' ? "bg-emerald-500 text-white" :
+                                      order.status.toLowerCase() === 'delivered' ? "bg-emerald-400 text-white" :
+                                      order.status.toLowerCase().includes('verification') ? "bg-purple-600 text-white" :
+                                      order.status.toLowerCase() === 'shipped' ? "bg-blue-500 text-white" :
+                                      order.status.toLowerCase().includes('processing') ? "bg-amber-500 text-white" :
+                                      order.status.toLowerCase().includes('submitted') ? "bg-gray-500 text-white" :
+                                      "bg-amber-500 text-white"
                                     )}>
                                       {order.status}
                                     </div>
                                  </div>
+                                 {order.tracking_number && (
+                                    <div className="flex items-center space-x-3 bg-neutral-50 border border-neutral-100 px-4 py-2 rounded-xl font-mono text-xs text-black">
+                                       <span className="text-[9px] font-black uppercase text-neutral-400 tracking-widest">No. Resi:</span>
+                                       <span className="font-bold tracking-tight select-all">{order.tracking_number}</span>
+                                    </div>
+                                 )}
                               </div>
                            </div>
                          );
@@ -575,8 +741,11 @@ export default function Profile() {
             exit={{ opacity: 0, y: 20, x: '-50%' }}
             className="fixed bottom-12 left-1/2 -translate-x-1/2 z-[200] bg-black text-white px-8 py-4 rounded-2xl flex items-center space-x-4 shadow-2xl border border-white/10 backdrop-blur-xl"
           >
-            <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white shrink-0">
-               <CheckCircle size={18} />
+            <div className={cn(
+              "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
+              notification.type === 'warning' ? "bg-yellow-400 text-black" : "bg-emerald-500 text-white"
+            )}>
+               {notification.type === 'warning' ? <AlertCircle size={18} /> : <CheckCircle size={18} />}
             </div>
             <p className="text-[10px] font-black uppercase tracking-widest">{notification.message}</p>
           </motion.div>
@@ -610,8 +779,12 @@ export default function Profile() {
                     <Star size={40} fill="currentColor" />
                   </div>
                   <div className="space-y-1">
-                    <h2 className="text-4xl font-display font-black tracking-tighter uppercase">Write Your Review</h2>
-                    <p className="sleek-label opacity-40">Your feedback helps the community grow</p>
+                    <h2 className="text-4xl font-display font-black tracking-tighter uppercase">
+                      {selectedOrder?.reviewed ? 'Your Review' : 'Write Your Review'}
+                    </h2>
+                    <p className="sleek-label opacity-40">
+                      {selectedOrder?.reviewed ? 'You have submitted a review for this purchase.' : 'Your feedback helps the community grow'}
+                    </p>
                   </div>
                 </div>
 
@@ -620,10 +793,11 @@ export default function Profile() {
                     {[1, 2, 3, 4, 5].map((index) => (
                       <button
                         key={index}
-                        onClick={() => setRating(index)}
-                        onMouseEnter={() => setHover(index)}
-                        onMouseLeave={() => setHover(0)}
-                        className="transition-transform active:scale-90"
+                        onClick={selectedOrder?.reviewed ? undefined : () => setRating(index)}
+                        onMouseEnter={selectedOrder?.reviewed ? undefined : () => setHover(index)}
+                        onMouseLeave={selectedOrder?.reviewed ? undefined : () => setHover(0)}
+                        className={cn("transition-transform", !selectedOrder?.reviewed && "active:scale-90")}
+                        disabled={selectedOrder?.reviewed}
                       >
                         <Star 
                           size={48} 
@@ -637,30 +811,42 @@ export default function Profile() {
                   </div>
 
                   <div className="space-y-4">
-                    <label className="sleek-label text-black">Your thoughts on the product</label>
+                    <label className="sleek-label text-black">
+                      {selectedOrder?.reviewed ? 'Your written thoughts' : 'Your thoughts on the product'}
+                    </label>
                     <textarea 
                       placeholder="Was the quality as expected? How was the fit?"
                       value={review}
-                      onChange={(e) => setReview(e.target.value)}
-                      className="w-full min-h-[150px] bg-gray-50 rounded-3xl p-8 outline-none focus:ring-4 focus:ring-black/5 transition-all text-sm font-medium border border-gray-100 resize-none"
+                      onChange={selectedOrder?.reviewed ? undefined : (e) => setReview(e.target.value)}
+                      readOnly={selectedOrder?.reviewed}
+                      className="w-full min-h-[150px] bg-gray-50 rounded-3xl p-8 outline-none focus:ring-4 focus:ring-black/5 transition-all text-sm font-medium border border-gray-100 resize-none disabled:opacity-85"
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  {selectedOrder?.reviewed ? (
                     <button 
                       onClick={() => setShowReviewModal(false)}
-                      className="sleek-button-secondary py-5 text-sm uppercase tracking-widest"
+                      className="sleek-button-primary w-full py-5 text-sm uppercase tracking-widest bg-black text-white hover:bg-neutral-800"
                     >
-                      Cancel
+                      Close
                     </button>
-                    <button 
-                      onClick={handlePublishReview}
-                      disabled={!rating || !review}
-                      className="sleek-button-primary py-5 text-sm uppercase tracking-widest disabled:opacity-20"
-                    >
-                      Publish Review
-                    </button>
-                  </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                      <button 
+                        onClick={() => setShowReviewModal(false)}
+                        className="sleek-button-secondary py-5 text-sm uppercase tracking-widest"
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        onClick={handlePublishReview}
+                        disabled={!rating || !review}
+                        className="sleek-button-primary py-5 text-sm uppercase tracking-widest disabled:opacity-20"
+                      >
+                        Publish Review
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </motion.div>

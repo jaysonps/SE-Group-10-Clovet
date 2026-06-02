@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '../lib/utils';
+import { cn, getFallbackReviews } from '../lib/utils';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -349,11 +349,28 @@ const STATS = [
   { label: 'Highest Sale', value: 'IDR 350.000', change: '+12.5%' },
 ];
 
+const MOCK_REVIEWS = [
+  { id: 1, user: 'Damian Rice', rating: 5, date: '12 May 2026', comment: 'The material is top notch. Definitely worth the price. The fit is true to size and colors are as vibrant as shown in photos.' },
+  { id: 2, user: 'Sarah Jenkins', rating: 4, date: '10 May 2026', comment: 'Great quality, but the shipping took a bit longer than expected. Overall happy with the product.' },
+  { id: 3, user: 'Michael Chen', rating: 5, date: '05 May 2026', comment: 'Always a fan of Clovet products. This tee is my 5th purchase and it never disappoints.' },
+  { id: 4, user: 'Emma Watson', rating: 5, date: '02 May 2026', comment: 'Incredible quality, feels like high-end luxury brand. The olive green shade is perfect.' },
+  { id: 5, user: 'Mary Jane', rating: 3, date: '28 April 2026', comment: 'Decent quality but I expected it to be a bit thicker. Still good for summer weather.' },
+];
+
 export default function ProductDetail() {
   const { id } = useParams();
   const [dbProduct, setDbProduct] = useState<any>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error" | "warning"; text: string } | null>(null);
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
   const [isLoading, setIsLoading] = useState(true);
   const [dbPriceHistory, setDbPriceHistory] = useState<any[]>([]);
+  const [dbReviews, setDbReviews] = useState<any[]>([]);
 
   useEffect(() => {
     fetch('/api/products')
@@ -374,6 +391,28 @@ export default function ProductDetail() {
         }
       })
       .catch(console.error);
+
+    fetch(`/api/reviews/product/${id}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.reviews && data.reviews.length > 0) {
+          const mapped = data.reviews.map((r: any) => ({
+            id: r.id,
+            user: r.user_name || 'Anonymous',
+            rating: Number(r.rating),
+            date: new Date(r.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+            comment: r.comment,
+            verified: true,
+          }));
+          setDbReviews(mapped);
+        } else {
+          setDbReviews([]);
+        }
+      })
+      .catch((err) => {
+        console.error(err);
+        setDbReviews([]);
+      });
   }, [id]);
 
   const mockProduct = PRODUCTS[id || '1'] || PRODUCTS['1'];
@@ -398,15 +437,32 @@ export default function ProductDetail() {
   const [priceRange, setPriceRange] = useState('6M');
   const [addedToCart, setAddedToCart] = useState(false);
 
-  // Scroll to top and reset state when product ID changes
+  const fallbackReviews = getFallbackReviews(id, product?.name, product?.category);
+  const displayReviews = dbReviews.length > 0 ? dbReviews : fallbackReviews;
+  const latestReview = displayReviews[0] || { user: 'No Reviewer', rating: 5, date: 'N/A', comment: 'No reviews for this product yet.' };
+  const averageRating = displayReviews.length > 0
+    ? displayReviews.reduce((sum: number, r: any) => sum + r.rating, 0) / displayReviews.length
+    : 5;
+
+  const priceVal = product.price || 150000;
+  const originalPriceVal = Number(product.originalPrice) || (priceVal * 2);
+  const discountPercent = Math.round(((originalPriceVal - priceVal) / originalPriceVal) * 100);
+
+  const dynamicStats = [
+    { label: 'Average Sale', value: `IDR ${Math.round(priceVal * 0.95).toLocaleString()}`, change: '+2.5%' },
+    { label: 'Retail Value', value: `IDR ${Math.round(originalPriceVal).toLocaleString()}`, change: `-${discountPercent}%`, negative: discountPercent > 0 },
+    { label: 'Lowest Sale', value: `IDR ${Math.round(priceVal * 0.8).toLocaleString()}`, change: '+1.2%' },
+    { label: 'Highest Sale', value: `IDR ${Math.round(priceVal * 1.1).toLocaleString()}`, change: '+12.5%' },
+  ];
+
   useEffect(() => {
     window.scrollTo(0, 0);
     setActiveImg(0);
     setSelectedSize(null);
     setAddedToCart(false);
+    setDbReviews([]);
   }, [id]);
 
-  // Parse sizes correctly
   const productSizes = (() => {
     if (!product.sizes) return {};
     if (typeof product.sizes === 'string') {
@@ -418,7 +474,6 @@ export default function ProductDetail() {
   })();
 
   const SIZES = ['XS', 'S', 'M', 'L', 'XL'];
-  // Only show sizes that have stock > 0
   const availableSizes = SIZES.filter(size => (Number(productSizes[size]) || 0) > 0);
 
   const handleInstantBuy = () => {
@@ -427,10 +482,9 @@ export default function ProductDetail() {
       return;
     }
     if (!selectedSize) {
-      alert('Please select a size first');
+      setToast({ type: "warning", text: "Please select a size first" });
       return;
     }
-    // Redirecting directly as requested
     navigate(`/checkout?productId=${product.id}&size=${selectedSize}`);
   };
 
@@ -440,7 +494,7 @@ export default function ProductDetail() {
       return;
     }
     if (!selectedSize) {
-      alert('Please select a size first');
+      setToast({ type: "warning", text: "Please select a size first" });
       return;
     }
     
@@ -462,7 +516,7 @@ export default function ProductDetail() {
   const getChartData = () => {
     const history = dbPriceHistory.length > 0 ? dbPriceHistory : product.historyData;
     // Mock data manipulation based on range
-    if (priceRange === '1M') return history.slice(-1);
+    if (priceRange === '1M') return history.slice(-2);
     if (priceRange === '3M') return history.slice(-3);
     return history;
   };
@@ -523,19 +577,13 @@ export default function ProductDetail() {
             <div className="space-y-6">
               <div className="flex items-center justify-between gap-4">
                 <span className="sleek-label bg-black text-white px-4 py-1.5 rounded-full">Ready to Ship</span>
-                <span className={cn(
-                  "sleek-label px-4 py-1.5 rounded-full font-bold text-xs uppercase tracking-wider",
-                  (product.status || 'VERIFIED') === 'VERIFIED' ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/10" : "bg-amber-100 text-amber-800"
-                )}>
-                  {(product.status || 'VERIFIED') === 'VERIFIED' ? 'Verified Authentic' : 'Verifikasi saat dibeli'}
-                </span>
               </div>
               <div className="space-y-2">
                 <p className="sleek-label opacity-50">{product.brand}</p>
                 <h1 className="text-6xl font-display font-black tracking-tighter uppercase leading-[0.9]">{product.name}</h1>
               </div>
               <div className="space-y-3 pt-4">
-                <p className="sleek-label">Market Value Starts From</p>
+                <p className="sleek-label">Market Value</p>
                 <div className="flex items-end space-x-6">
                   <p className="text-5xl font-display font-black text-[#556B2F] leading-none">IDR {product.price.toLocaleString()}</p>
                   {product.originalPrice && (
@@ -646,9 +694,15 @@ export default function ProductDetail() {
                 <div className="flex items-center justify-between mb-8">
                   <div className="flex items-center space-x-6">
                     <div className="flex space-x-0.5">
-                      {[...Array(5)].map((_, i) => <Star key={i} size={14} className="fill-black text-black" />)}
+                      {[...Array(5)].map((_, i) => (
+                        <Star 
+                          key={i} 
+                          size={14} 
+                          className={cn(i < Math.round(averageRating) ? "fill-black text-black" : "fill-gray-100 text-gray-100")} 
+                        />
+                      ))}
                     </div>
-                    <span className="sleek-label text-black">Member Reviews (5)</span>
+                    <span className="sleek-label text-black">Member Reviews ({displayReviews.length})</span>
                   </div>
                   <Link 
                     to={`/product/${id}/reviews`}
@@ -658,11 +712,22 @@ export default function ProductDetail() {
                   </Link>
                </div>
                <div className="sleek-card p-8 space-y-4 border-gray-100">
-                  <div className="flex justify-between items-center">
-                    <span className="sleek-label text-black">Mark Jones</span>
-                    <span className="sleek-label opacity-40">15 Nov 2026</span>
+                  <div className="flex justify-between items-start">
+                    <div className="space-y-1.5 text-left border-0">
+                      <span className="sleek-label text-black font-semibold block">{latestReview.user}</span>
+                      <div className="flex space-x-0.5">
+                        {[...Array(5)].map((_, i) => (
+                          <Star 
+                            key={i} 
+                            size={12} 
+                            className={cn(i < latestReview.rating ? "fill-black text-black" : "fill-gray-100 text-gray-100")} 
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <span className="sleek-label opacity-40">{latestReview.date}</span>
                   </div>
-                  <p className="text-sm text-gray-600 italic leading-relaxed font-medium">"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco."</p>
+                  <p className="text-sm text-gray-600 italic leading-relaxed font-medium text-left">"{latestReview.comment}"</p>
                </div>
             </div>
           </div>
@@ -721,7 +786,7 @@ export default function ProductDetail() {
               <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
                  {/* Stats Column */}
                  <div className="grid grid-cols-1 gap-4">
-                    {STATS.map(stat => (
+                    {dynamicStats.map(stat => (
                       <div key={stat.label} className="sleek-card p-8 flex items-center justify-between border-gray-50">
                          <div className="space-y-1">
                             <p className="sleek-label">{stat.label}</p>
@@ -825,7 +890,7 @@ export default function ProductDetail() {
                   <button 
                     onClick={() => {
                       navigator.clipboard.writeText(window.location.href);
-                      alert('Link copied to clipboard!');
+                      setToast({ type: "success", text: "Link copied to clipboard!" });
                     }}
                     className="p-4 bg-gray-50 rounded-2xl hover:bg-gray-100 transition-all group"
                   >
@@ -917,6 +982,25 @@ export default function ProductDetail() {
                 </div>
               </motion.div>
             </div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {toast && (
+            <motion.div
+              initial={{ opacity: 0, y: 50, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.9 }}
+              className="fixed bottom-10 right-10 z-[200] max-w-sm bg-zinc-900 text-white rounded-[1.5rem] p-6 shadow-2xl border border-zinc-800 space-y-2"
+            >
+              <div className="flex items-center space-x-3">
+                <Info size={18} className="text-amber-500" />
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#9cfa58]">
+                  Notification
+                </p>
+              </div>
+              <p className="text-xs text-zinc-300 font-bold uppercase tracking-tight">{toast.text}</p>
+            </motion.div>
           )}
         </AnimatePresence>
       </div>

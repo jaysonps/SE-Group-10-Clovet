@@ -13,7 +13,6 @@ if (connectionString) {
   connectionString = connectionString.trim().split(/\s+/)[0];
 }
 
-// In Cloud Run sandbox or missing pg instance, use PGlite fallback
 const usePglite = !connectionString || connectionString.includes("localhost") || connectionString.includes("127.0.0.1");
 
 if (usePglite) {
@@ -27,7 +26,6 @@ if (usePglite) {
   });
 }
 
-// Transparent DB pool wrapper
 const dbPool = {
   query: async (text: string, params?: any[]) => {
     if (isPglite && pgliteInstance) {

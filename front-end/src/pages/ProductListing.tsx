@@ -50,7 +50,7 @@ export default function ProductListing() {
   const [isLoading, setIsLoading] = useState(true);
 
   React.useEffect(() => {
-    fetch('/api/products?status=VERIFIED')
+    fetch('/api/products')
       .then(res => res.json())
       .then(data => {
         setProducts(data.products || []);
@@ -71,7 +71,6 @@ export default function ProductListing() {
   const [activeFilters, setActiveFilters] = useState<string[]>(() => {
     const filters: string[] = [];
     if (categoryParam) {
-      // Map common slugs to full category names
       const slugMap: Record<string, string> = {
         'knitwears': 'Knitwears & Fleeces',
         'knitwears-fleeces': 'Knitwears & Fleeces',
@@ -110,13 +109,13 @@ export default function ProductListing() {
     if (sortParam === 'trending') newFilters.push('Trending');
     if (filterParam === 'promotion') newFilters.push('Promotion');
     setActiveFilters(newFilters);
-    setVisibleCount(12); // Reset visible count on filter change
+    setVisibleCount(12);
   }, [categoryParam, sortParam, filterParam]);
 
   const toggleFilter = (filter: string) => {
     setActiveFilters(prev => {
       const newFilters = prev.includes(filter) ? prev.filter(f => f !== filter) : [...prev, filter];
-      setVisibleCount(12); // Reset visible count on filter change
+      setVisibleCount(12);
       return newFilters;
     });
   };
@@ -124,6 +123,17 @@ export default function ProductListing() {
   const sortOptions = ['Featured Items', 'Price: Low to High', 'Price: High to Low', 'Release Date'];
 
   const filteredProducts = products.filter(product => {
+    // 0. Search Query Filter
+    const searchQuery = (searchParams.get('q') || searchParams.get('search') || '').toLowerCase().trim();
+    if (searchQuery) {
+      const matchName = product.name?.toLowerCase().includes(searchQuery);
+      const matchBrand = product.brand?.toLowerCase().includes(searchQuery);
+      const matchCategory = product.category?.toLowerCase().includes(searchQuery);
+      const matchColor = product.color?.toLowerCase().includes(searchQuery);
+      const matchDesc = product.desc?.toLowerCase().includes(searchQuery);
+      if (!matchName && !matchBrand && !matchCategory && !matchColor && !matchDesc) return false;
+    }
+
     // 1. Category Filter
     const activeCategories = activeFilters.filter(f => FILTER_CATEGORIES.includes(f));
     if (activeCategories.length > 0 && !activeCategories.includes(product.category)) return false;
@@ -165,7 +175,6 @@ export default function ProductListing() {
     return true;
   });
 
-  // Dynamically determine which sizes are available in the current product set (with stock > 0)
   const availableFilterSizes = SIZES.filter(size => {
     return products.some(product => {
        if (!product.sizes) return false;
@@ -186,7 +195,7 @@ export default function ProductListing() {
       const bVal = b.created_at ? new Date(b.created_at).getTime() : (parseInt(b.id) || 0);
       return bVal - aVal;
     }
-    return 0; // Featured Items / Default order
+    return 0;
   });
 
   const displayedProducts = sortedProducts.slice(0, visibleCount);
@@ -469,7 +478,7 @@ export default function ProductListing() {
                     </div>
                     <div className="space-y-4">
                       <div>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Authentic</p>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Clovet</p>
                         <h3 className="font-bold text-sm text-black leading-tight line-clamp-1 uppercase">{product.name}</h3>
                       </div>
                       <div className="flex items-center gap-3 pt-3 border-t border-gray-50">
@@ -505,7 +514,7 @@ export default function ProductListing() {
 
              {!isLoading && sortedProducts.length === 0 && (
                <div className="mt-20 text-center py-20 bg-gray-50 rounded-[3rem] border border-dashed border-gray-200">
-                 <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">No verified products available in the vault.</p>
+                 <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">No products available in the vault.</p>
                </div>
              )}
           </div>

@@ -1,55 +1,224 @@
-# Clovet - Premium Fashion Marketplace
+# Clovet — Premium Fashion Marketplace
 
-Clovet is a digital fashion marketplace integrating secure transactions between buyers and sellers with a focus on premium categories. It features AI-powered product categorization, escrow protection, and a professional verification workflow.
+Clovet adalah platform marketplace fashion digital yang mengintegrasikan transaksi aman antara penjual dan pembeli. Fokus utama pada produk fashion premium dengan mekanisme **escrow**, **autentikasi produk** oleh Expert Verifier, serta klasifikasi produk berbasis **AI/NLP**.
 
-## Local Development Setup
+---
 
-To run Clovet locally, follow these steps:
+## Prasyarat
 
-### 1. Prerequisites
-- Node.js (v18 or higher)
-- PostgreSQL (v14 or higher) - *Optional/Fallback built-in*: If not installed or running, the system will automatically fall back to **PGlite** (an in-process PostgreSQL database running in Node.js) with persistent storage in `./database/pglite_data`.
-- Python (v3.9 or higher) for NLP classification
+| Komponen | Versi Minimum | Rekomendasi |
+|---|---|---|
+| Node.js | v18 LTS | v20 LTS |
+| PostgreSQL | v14 | v16 *(opsional — ada fallback PGlite)* |
+| Python | v3.9 | v3.11 |
 
-### 2. Environment Variables
-Create a `.env` file in the root directory (copy from `.env.example`) and set the following:
+> **Catatan PGlite:** Jika PostgreSQL tidak terinstal atau tidak berjalan, sistem otomatis menggunakan **PGlite** (in-process PostgreSQL) dengan penyimpanan persisten di `./database/pglite_data`.
 
-- `DATABASE_URL`: Your PostgreSQL connection string. If left blank or points to localhost where no active PG service is running, the application **automatically initializes a local PGlite instance** to ensure 100% functionality with persistent state.
-- `PYTHON_PATH`: Path to your python executable (defaults to `python3`).
-- `NODE_ENV`: Set to `development` for local testing.
+---
 
-### 3. Installation
-**IMPORTANT:** You must install dependencies before running the app.
+## Setup Lokal
+
+### 1. Clone & Install
 ```bash
 npm install
 ```
 
-### 4. Running the App
+### 2. Environment Variables
+Salin `.env.example` menjadi `.env` dan sesuaikan:
+
+```env
+DATABASE_URL=          # Kosongkan untuk pakai PGlite otomatis, atau isi string koneksi PostgreSQL
+PYTHON_PATH=python3    # Path ke executable Python
+NODE_ENV=development
+JWT_SECRET=clovet_jwt_secret_dev
+```
+
+### 3. Jalankan Aplikasi
 ```bash
-# Start both Backend (Express) and Frontend (Vite)
 npm run dev
 ```
 
-The app will be available at `http://localhost:3000`.
+Aplikasi tersedia di: **http://localhost:3000**
 
-## Test Accounts
-The following accounts are pre-registered for testing different roles:
+---
+
+## Akun Test
 
 | Role | Username | Email | Password |
-| :--- | :--- | :--- | :--- |
-| **Customer** | customer | customer@gmail.com | `@Customer123` |
-| **Seller** | seller | seller@gmail.com | `@seller123` |
-| **Verifier** | verifier | verifier@gmail.com | `@verifier123` |
+|---|---|---|---|
+| **Customer** | `CUST001` | `customer@gmail.com` | `@Customer123` |
+| **Seller** | `seller` | `seller@gmail.com` | `@Seller123` |
+| **Verifier** | `verifier` | `verifier@gmail.com` | `@Verifier123` |
 
-## Architecture
-The project is modularized for better maintainability:
-- `/front-end`: React + Vite + Tailwind UI (located in `front-end/src`)
-- `/backend`: Express API routes and logic
-- `/database`: Database connection and pooling
-- `/ai`: NLP Classification logic (Python script + Node.js bridge)
+> Login bisa menggunakan **email** atau **username**.
 
-## AI Features (NLP)
-Clovet uses a custom Natural Language Processing (NLP) classifier built with Python to automatically analyze product titles and descriptions to suggest the most relevant categories during the listing process. Predicted categories are strictly limited to:
+---
+
+## API Endpoints
+
+### Auth
+| Method | Endpoint | Deskripsi |
+|---|---|---|
+| `POST` | `/api/register` | Registrasi akun baru |
+| `POST` | `/api/login` | Login → return JWT token |
+
+### Products
+| Method | Endpoint | Auth | Deskripsi |
+|---|---|---|---|
+| `GET` | `/api/products` | — | Daftar produk (filter: status, gender, condition, limit, offset) |
+| `POST` | `/api/products` | Seller | Tambah produk baru (status: `ACTIVE`) |
+| `PUT` | `/api/products/:id` | Seller | Edit produk (status tidak berubah — BR-4) |
+| `DELETE` | `/api/products/:id` | Seller | Hapus produk |
+| `POST` | `/api/analyze-category` | — | Analisis kategori produk via NLP (min. 15 kata) |
+| `GET` | `/api/products/:id/price-history` | — | Riwayat harga produk |
+
+### Orders — Alur BR-1
+| Method | Endpoint | Auth | Deskripsi |
+|---|---|---|---|
+| `POST` | `/api/orders` | Customer | Buat pesanan → status **`SUBMITTED`** |
+| `POST` | `/api/payment/process` | Customer | Simulasi payment gateway → status **`PAID`** (escrow) |
+| `PATCH` | `/api/orders/:id/ship` | Seller | Kirim ke verifikator → status **`IN_VERIFICATION`** |
+| `PATCH` | `/api/orders/:id/verify` | Verifier | Verifikasi keaslian → `SHIPPED` atau `REFUNDED` |
+| `PATCH` | `/api/orders/:id/deliver` | — | Konfirmasi pengiriman → status **`DELIVERED`** |
+| `PATCH` | `/api/orders/:id/complete` | — | Selesaikan pesanan → status **`COMPLETED`** |
+| `GET` | `/api/orders` | ✓ | Daftar pesanan (filter: status, search) |
+
+### Logistik (Dummy API)
+| Method | Endpoint | Auth | Deskripsi |
+|---|---|---|---|
+| `POST` | `/api/shipping/rates` | — | Hitung ongkir berdasarkan kode pos tujuan |
+
+**Request body:**
+```json
+{
+  "destination_postal_code": "12345",
+  "weight_grams": 500
+}
+```
+**Response:**
+```json
+{
+  "destination_postal_code": "12345",
+  "weight_grams": 500,
+  "zone": "local",
+  "rates": [
+    { "courier": "JNE",      "service": "REG",  "estimated_days": "1-2", "price": 11000 },
+    { "courier": "JNE",      "service": "YES",  "estimated_days": "1",   "price": 21000 },
+    { "courier": "SiCepat",  "service": "HALU", "estimated_days": "1-2", "price": 10000 },
+    { "courier": "AnterAja", "service": "REG",  "estimated_days": "1-2", "price": 9500  }
+  ]
+}
+```
+
+> **Zona otomatis** berdasarkan 2 digit pertama kode pos:
+> - `10–16` → `local` (Jabodetabek)
+> - `17–65` → `inter-island` (Pulau Jawa)
+> - Lainnya → `remote` (Luar Jawa)
+
+### Payment (Simulasi Gateway)
+| Method | Endpoint | Auth | Deskripsi |
+|---|---|---|---|
+| `POST` | `/api/payment/process` | ✓ | Simulasi Midtrans/Xendit — validasi order `SUBMITTED`, cek 15 menit (BR-3), update ke `PAID` |
+
+**Request body:**
+```json
+{ "order_id": 123 }
+```
+**Response:**
+```json
+{
+  "message": "Payment successful. Funds held in escrow.",
+  "order": { "id": 123, "status": "PAID", "paid_at": "..." },
+  "payment_simulation": {
+    "gateway": "Midtrans (Simulated)",
+    "service_fee": 50000,
+    "status": "CAPTURED"
+  }
+}
+```
+
+### Seller Finance & OTP
+| Method | Endpoint | Auth | Deskripsi |
+|---|---|---|---|
+| `GET` | `/api/seller/finance` | Seller | Saldo, pending valuation, riwayat ledger |
+| `GET` | `/api/seller/stats` | Seller | Statistik penjualan (7D/1M/3M/ALL) |
+| `POST` | `/api/seller/otp/request` | Seller | Request OTP untuk penarikan saldo (REQ-F6-2) |
+| `POST` | `/api/seller/extract` | Seller | Tarik saldo — wajib sertakan `otp_code` |
+
+**Extract request body:**
+```json
+{
+  "amount": 500000,
+  "bank": "BCA CENTRAL ASIA",
+  "accountNumber": "1234567890",
+  "otp_code": "123456"
+}
+```
+
+### Reviews
+| Method | Endpoint | Auth | Deskripsi |
+|---|---|---|---|
+| `GET` | `/api/reviews/product/:productId` | — | Semua ulasan untuk suatu produk |
+| `POST` | `/api/reviews` | ✓ | Buat ulasan (hanya untuk order `COMPLETED`, satu per order) |
+
+### Users
+| Method | Endpoint | Auth | Deskripsi |
+|---|---|---|---|
+| `GET` | `/api/users/:id` | ✓ | Profil pengguna |
+| `PUT` | `/api/users/:id` | ✓ | Update profil |
+| `PUT` | `/api/users/:id/change-password` | ✓ | Ganti password |
+
+---
+
+## Alur Transaksi (BR-1)
+
+```
+SUBMITTED → PAID → IN_VERIFICATION → SHIPPED → DELIVERED → COMPLETED
+                                   ↘ REJECTED → REFUNDED
+SUBMITTED (>15 menit tanpa bayar) → EXPIRED
+```
+
+---
+
+## Status Produk
+
+| Status | Keterangan |
+|---|---|
+| `ACTIVE` | Produk aktif, tersedia untuk dibeli |
+| `VERIFIED` | Produk telah lolos verifikasi keaslian |
+| `SOLD` | Stok habis |
+| `REJECTED` | Produk palsu, ditolak verifikator |
+
+> Produk baru langsung masuk status `ACTIVE` saat dipublish. Verifikasi dilakukan **setelah ada pesanan berbayar** (bukan saat listing).
+
+---
+
+## Struktur Proyek
+
+```
+clovet/
+├── backend/
+│   └── routes.ts          # Semua API endpoints
+├── database/
+│   ├── db.ts              # Koneksi pool (PostgreSQL / PGlite fallback)
+│   └── init.ts            # Inisialisasi tabel & seed data
+├── ai/
+│   └── nlp.ts             # Bridge Node.js → Python NLP classifier
+├── front-end/
+│   └── src/
+│       ├── pages/         # Halaman React (Checkout, SellerDashboard, dll)
+│       ├── context/       # AuthContext, CartContext
+│       └── assets/        # Gambar produk
+├── server.ts              # Entry point Express + Vite
+└── .env.example
+```
+
+---
+
+## Fitur NLP
+
+Classifier Python menganalisis judul dan deskripsi produk untuk menyarankan kategori secara otomatis. Minimal **15 kata** deskripsi diperlukan (REQ-F3-1). Kategori yang didukung:
+
 - Tops
 - Outerwears
 - Bottoms
