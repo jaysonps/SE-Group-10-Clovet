@@ -347,6 +347,12 @@ export default function ProductListing() {
                             type="number" 
                             placeholder="Min" 
                             value={minPrice}
+                            onBlur={() => {
+                              if (minPrice && maxPrice && parseInt(minPrice) > parseInt(maxPrice)) {
+                                setMinPrice('');
+                                setMaxPrice('');
+                              }
+                            }}
                             onChange={(e) => {
                               setMinPrice(e.target.value);
                               setVisibleCount(12);
@@ -360,6 +366,12 @@ export default function ProductListing() {
                             type="number" 
                             placeholder="Max" 
                             value={maxPrice}
+                            onBlur={() => {
+                              if (minPrice && maxPrice && parseInt(minPrice) > parseInt(maxPrice)) {
+                                setMinPrice('');
+                                setMaxPrice('');
+                              }
+                            }}
                             onChange={(e) => {
                               setMaxPrice(e.target.value);
                               setVisibleCount(12);
@@ -442,7 +454,7 @@ export default function ProductListing() {
                    <Link to={`/product/${product.id}`} key={product.id} className="group bg-white p-4 rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl transition-all">
                     <div className="aspect-square rounded-2xl overflow-hidden bg-gray-50 mb-6 relative">
                        <img src={product.image} alt={product.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-                       <div className="absolute top-3 left-3 bg-white text-[10px] font-black px-2 py-0.5 rounded shadow-sm">Verified</div>
+                       
                        <div className={cn(
                          "absolute top-3 right-3 text-[10px] font-black px-2 py-0.5 rounded shadow-sm",
                          product.condition === 'New' ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"

@@ -99,19 +99,32 @@ export default function Profile() {
         .then(res => res.json())
         .then(data => {
           const ordersList = data.orders || [];
-          const mapped = ordersList.map((o: any) => ({
-            id: `ORD-${o.id}`,
-            date: new Date(o.created_at).toLocaleDateString(),
-            status: o.status,
-            reviewed: false,
-            items: [{
-              name: o.product_name,
-              price: Number(o.total_amount),
-              size: 'M', 
-              condition: 'Verified',
-              image: o.product_image
-            }]
-          }));
+          const mapped = ordersList.map((o: any) => {
+            let readableStatus = o.status;
+            if (o.status === 'PAID') {
+              readableStatus = 'Processing (Awaiting Seller Ship)';
+            } else if (o.status === 'IN_VERIFICATION') {
+              readableStatus = 'In Verification Center';
+            } else if (o.status === 'SHIPPED') {
+              readableStatus = 'Verified & Shipping';
+            } else if (o.status === 'REJECTED') {
+              readableStatus = 'Rejected (Counterfeit Alert!)';
+            }
+
+            return {
+              id: `ORD-${o.id}`,
+              date: new Date(o.created_at).toLocaleDateString(),
+              status: readableStatus,
+              reviewed: false,
+              items: [{
+                name: o.product_name,
+                price: Number(o.total_amount),
+                size: 'M', 
+                condition: o.status === 'SHIPPED' ? 'AUTHENTIC' : o.status === 'REJECTED' ? 'COUNTERFEIT' : 'Pending Verification',
+                image: o.product_image
+              }]
+            };
+          });
           setDbOrders(mapped);
           setIsLoadingOrders(false);
         })
@@ -537,7 +550,7 @@ export default function Profile() {
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</p>
                                     <div className={cn(
                                       "inline-flex px-6 py-2 text-[10px] font-black rounded-full uppercase tracking-widest shadow-lg",
-                                      order.status === 'Delivered' ? "bg-black text-white" : "bg-emerald-500 text-white"
+                                      order.status.includes('Rejected') ? "bg-red-500 text-white" : order.status.includes('Verification') ? "bg-neutral-850 text-white" : order.status.includes('Verified') ? "bg-emerald-500 text-white" : "bg-amber-500 text-white"
                                     )}>
                                       {order.status}
                                     </div>

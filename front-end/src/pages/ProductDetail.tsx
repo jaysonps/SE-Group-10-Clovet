@@ -521,8 +521,14 @@ export default function ProductDetail() {
           {/* Right: Info */}
           <div className="space-y-12">
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-4">
                 <span className="sleek-label bg-black text-white px-4 py-1.5 rounded-full">Ready to Ship</span>
+                <span className={cn(
+                  "sleek-label px-4 py-1.5 rounded-full font-bold text-xs uppercase tracking-wider",
+                  (product.status || 'VERIFIED') === 'VERIFIED' ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/10" : "bg-amber-100 text-amber-800"
+                )}>
+                  {(product.status || 'VERIFIED') === 'VERIFIED' ? 'Verified Authentic' : 'Verifikasi saat dibeli'}
+                </span>
               </div>
               <div className="space-y-2">
                 <p className="sleek-label opacity-50">{product.brand}</p>

@@ -123,7 +123,6 @@ export default function Home() {
                     )}
                   </div>
                   <div className="space-y-2 px-1">
-                    <div className="sleek-label opacity-60">Verified Item</div>
                     <h3 className="font-bold text-lg tracking-tight group-hover:text-gray-600 transition-colors uppercase">{product.name}</h3>
                     <div className="flex items-center space-x-3">
                       <p className="font-black text-xl">IDR {Number(product.price).toLocaleString()}</p>

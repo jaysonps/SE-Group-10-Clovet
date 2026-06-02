@@ -108,6 +108,15 @@ export const initDb = async () => {
       )
     `);
 
+    // Ensure columns exist for tracking and verification (for existing DBs)
+    try {
+      await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_number TEXT");
+      await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS verifier_id INTEGER");
+      await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS verification_notes TEXT");
+    } catch (e) {
+      console.log("Error updating orders table columns:", e);
+    }
+
     // Ensure metadata table exists to track initialization
     await pool.query(`
       CREATE TABLE IF NOT EXISTS metadata (

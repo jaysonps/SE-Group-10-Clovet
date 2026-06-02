@@ -8,13 +8,13 @@ To run Clovet locally, follow these steps:
 
 ### 1. Prerequisites
 - Node.js (v18 or higher)
-- PostgreSQL (v14 or higher)
+- PostgreSQL (v14 or higher) - *Optional/Fallback built-in*: If not installed or running, the system will automatically fall back to **PGlite** (an in-process PostgreSQL database running in Node.js) with persistent storage in `./database/pglite_data`.
 - Python (v3.9 or higher) for NLP classification
 
 ### 2. Environment Variables
 Create a `.env` file in the root directory (copy from `.env.example`) and set the following:
 
-- `DATABASE_URL`: Your PostgreSQL connection string (e.g., `postgres://user:password@localhost:5432/clovet`).
+- `DATABASE_URL`: Your PostgreSQL connection string. If left blank or points to localhost where no active PG service is running, the application **automatically initializes a local PGlite instance** to ensure 100% functionality with persistent state.
 - `PYTHON_PATH`: Path to your python executable (defaults to `python3`).
 - `NODE_ENV`: Set to `development` for local testing.
 

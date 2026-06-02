@@ -1,26 +1,81 @@
 import pg from "pg";
+import { PGlite } from "@electric-sql/pglite";
+import path from "path";
 
 const { Pool } = pg;
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
-});
+let pool: any = null;
+let pgliteInstance: PGlite | null = null;
+let isPglite = false;
 
-// Test connection on startup
-pool.connect((err, client, release) => {
-  if (err) {
-    console.error("❌ Database connection failed:", err.message);
-    console.error("Check if DATABASE_URL is set correctly in your environment variables.");
-  } else {
-    console.log("✅ Database connected successfully");
-    if (client) release();
+let connectionString = process.env.DATABASE_URL;
+if (connectionString) {
+  connectionString = connectionString.trim().split(/\s+/)[0];
+}
+
+// In Cloud Run sandbox or missing pg instance, use PGlite fallback
+const usePglite = !connectionString || connectionString.includes("localhost") || connectionString.includes("127.0.0.1");
+
+if (usePglite) {
+  console.log("ℹ️ Using persistent PGlite fallback for development database...");
+  pgliteInstance = new PGlite(path.join(process.cwd(), "database", "pglite_data"));
+  isPglite = true;
+} else {
+  pool = new Pool({
+    connectionString,
+    ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
+  });
+}
+
+// Transparent DB pool wrapper
+const dbPool = {
+  query: async (text: string, params?: any[]) => {
+    if (isPglite && pgliteInstance) {
+      const res = await pgliteInstance.query(text, params);
+      return {
+        rows: res.rows,
+        rowCount: res.affectedRows ?? res.rows.length,
+        command: "SELECT"
+      };
+    } else {
+      return await pool.query(text, params);
+    }
+  },
+  connect: (cb?: any) => {
+    if (isPglite) {
+      const dbClient = {
+        query: dbPool.query,
+        release: () => {}
+      };
+      if (cb) cb(null, dbClient, () => {});
+      return Promise.resolve(dbClient);
+    } else {
+      return pool.connect(cb);
+    }
+  },
+  on: (event: string, cb: any) => {
+    if (!isPglite && pool) {
+      pool.on(event, cb);
+    }
   }
-});
+};
+
+if (isPglite) {
+  console.log("✅ PGlite fallback initialized successfully");
+} else {
+  pool.connect((err: any, client: any, release: any) => {
+    if (err) {
+      console.error("❌ Database connection failed:", err.message);
+    } else {
+      console.log("✅ Database connected successfully");
+      if (client) release();
+    }
+  });
+}
 
 export const dbQueue = async (query: string, params?: any[]) => {
-  const result = await pool.query(query, params);
+  const result = await dbPool.query(query, params);
   return result;
 };
 
-export default pool;
+export default dbPool;

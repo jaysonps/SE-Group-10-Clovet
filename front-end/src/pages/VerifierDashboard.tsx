@@ -34,26 +34,29 @@ export default function VerifierDashboard() {
   const [isLoading, setIsLoading] = useState(true);
 
   React.useEffect(() => {
-    fetchProducts();
+    fetchOrdersForVerification();
   }, []);
 
-  const fetchProducts = async () => {
+  const fetchOrdersForVerification = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/products');
+      const response = await fetch('/api/orders');
       if (response.ok) {
         const data = await response.json();
-        const productsList = Array.isArray(data) ? data : (data.products || []);
-        const mappedData = productsList.map((item: any) => ({
+        const ordersList = data.orders || [];
+        // Show orders that are PAID, IN_VERIFICATION, SHIPPED, REJECTED, or COMPLETED so the verifier has a full view matching sales records
+        const filteredOrders = ordersList.filter((o: any) => o.status === 'PAID' || o.status === 'IN_VERIFICATION' || o.status === 'SHIPPED' || o.status === 'REJECTED' || o.status === 'COMPLETED');
+        const mappedData = filteredOrders.map((item: any) => ({
           id: item.id.toString(),
-          product: item.name,
+          product: item.product_name,
           seller: 'Community Seller',
           date: new Date(item.created_at).toLocaleDateString(),
-          image: item.image,
-          sku: `CLVT-${item.id}`,
-          cat: item.category,
-          condition: item.condition,
-          status: item.status === 'VERIFIED' ? 'AUTHENTIC' : item.status === 'REJECTED' ? 'COUNTERFEIT' : 'WAITING',
+          image: item.product_image,
+          sku: `CLVT-${item.product_id}`,
+          cat: item.category || 'Apparel',
+          condition: item.condition || 'New',
+          tracking_number: item.tracking_number,
+          status: (item.status === 'SHIPPED' || item.status === 'COMPLETED') ? 'AUTHENTIC' : item.status === 'REJECTED' ? 'COUNTERFEIT' : 'WAITING',
           dbStatus: item.status
         }));
         setQueue(mappedData);
@@ -70,11 +73,10 @@ export default function VerifierDashboard() {
 
   const updateStatus = async (id: string, status: string, logisticsStrategy?: string) => {
     try {
-      const dbStatus = status === 'AUTHENTIC' ? 'VERIFIED' : 'REJECTED';
-      const response = await fetch(`/api/products/${id}/verify`, {
+      const response = await fetch(`/api/orders/${id}/verify`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: dbStatus })
+        body: JSON.stringify({ status, notes: logisticsStrategy || '' })
       });
       if (response.ok) {
         setQueue(prev => prev.map(item => item.id === id ? { ...item, status, logisticsStrategy } : item));
@@ -179,7 +181,7 @@ function VerificationQueue({ queue }: { queue: any[] }) {
             </div>
             <div className="space-y-1">
                <p className="text-4xl font-display font-black tracking-tighter text-black">{stats.authentic}</p>
-               <p className="text-[10px] font-black uppercase tracking-widest text-green-600">Verified Products</p>
+               <p className="text-[10px] font-black uppercase tracking-widest text-green-600">Verified Orders</p>
             </div>
          </div>
          <div className="sleek-card p-10 border-none space-y-6 bg-white">
@@ -410,10 +412,18 @@ export function InspectionDetail({ queue, onUpdateStatus }: { queue: typeof INIT
                           <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest leading-none">Analysis active</p>
                        </div>
                        <h1 className="text-5xl font-display font-black tracking-tighter uppercase leading-tight">{task.product}</h1>
-                       <div className="flex items-center space-x-4 border-l-8 border-black/5 pl-8 mt-8">
+                       <div className="flex flex-wrap items-center gap-8 border-l-8 border-black/5 pl-8 mt-8">
                           <div className="space-y-1">
                              <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Global SKU</p>
                              <p className="text-xl font-display font-black tracking-tight">{task.sku}</p>
+                              </div>
+                              {task.tracking_number && (
+                                 <div className="space-y-1">
+                                    <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Courier Receipt (Resi)</p>
+                                    <p className="text-xl font-mono font-black tracking-tight bg-gray-50 px-4 py-2 rounded-xl text-black border border-gray-100">{task.tracking_number}</p>
+                                 </div>
+                              )}
+                              <div className="hidden">
                           </div>
                        </div>
                     </div>

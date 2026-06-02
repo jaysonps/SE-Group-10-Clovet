@@ -869,7 +869,7 @@ function ProductsList() {
                       <th className="px-10 py-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Condition</th>
                       <th className="px-10 py-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Valuation</th>
                       <th className="px-10 py-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Supply</th>
-                      <th className="px-10 py-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Status</th>
+                      <th className="px-10 py-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -906,26 +906,17 @@ function ProductsList() {
                         <td className="px-10 py-8 font-black text-xs text-gray-400">
                           {getTotalSupply(product.sizes)} PCS
                         </td>
-                        <td className="px-10 py-8">
-                          <div className="flex items-center justify-between">
-                              <div className={cn(
-                                "inline-flex px-6 py-2 text-[10px] font-black rounded-full uppercase tracking-widest shadow-sm border",
-                                product.status === 'VERIFIED' ? "bg-black text-white border-black" : 
-                                product.status === 'PENDING' ? "bg-zinc-100 text-zinc-400 border-zinc-200" :
-                                product.status === 'SOLD' ? "bg-emerald-600 text-white border-emerald-700" :
-                                "bg-red-50 text-red-600 border-red-100"
-                              )}>
-                                {product.status}
-                              </div>
+                        <td className="px-10 py-8 text-right">
+                          <div className="flex items-center justify-end space-x-3">
                               <button 
                                 onClick={(e) => { e.stopPropagation(); setEditingProduct(product); }}
-                                className="px-6 py-3 bg-gray-50 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-black hover:text-white transition-all ml-4"
+                                className="px-6 py-3 bg-gray-50 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-black hover:text-white transition-all"
                               >
                                 Edit
                               </button>
                               <button 
                                 onClick={(e) => { e.stopPropagation(); handleDelete(product.id); }}
-                                className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all ml-2"
+                                className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all"
                               >
                                 <Trash2 size={16} />
                               </button>
@@ -1252,15 +1243,17 @@ function OrdersManagement() {
         setTotalOrders(data.total || 0);
         const mapped = ordersList.map((o: any) => ({
           id: `ORD-${o.id}`,
+          rawId: o.id,
           prod: o.product_name,
           cust: 'Authentic Buyer',
           date: new Date(o.created_at).toLocaleDateString(),
-          status: o.status === 'PAID' ? 'Processing' : o.status,
+          status: o.status === 'PAID' ? 'Processing' : o.status === 'IN_VERIFICATION' ? 'In Verification' : o.status === 'SHIPPED' ? 'Shipped' : o.status === 'REJECTED' ? 'Rejected' : o.status,
           price: `IDR ${Number(o.total_amount).toLocaleString()}`,
           qty: 1,
           total: `IDR ${Number(o.total_amount).toLocaleString()}`,
           review: null,
-          image: o.product_image
+          image: o.product_image,
+          trackingCode: o.tracking_number
         }));
         setOrders(mapped);
       }
@@ -1433,6 +1426,55 @@ function OrdersManagement() {
                      <span className="text-black">{selectedOrder.total}</span>
                   </div>
                </div>
+
+               {selectedOrder.status === 'Processing' && (
+                  <div className="p-8 bg-zinc-50 rounded-[2rem] space-y-4 border border-zinc-100">
+                     <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Fulfillment Actions</p>
+                     <p className="text-xs text-zinc-500">Please print the shipping label, send the product physically to the Clovet Verification Center, and save the Courier Tracking Code (Resi Pengiriman) below:</p>
+                     
+                     <div className="flex flex-col sm:flex-row gap-4">
+                        <input 
+                          type="text" 
+                          id="seller-input-tracking"
+                          placeholder="Courier Tracking Code (e.g. JNE982309489)" 
+                          className="flex-1 bg-white border border-gray-100 rounded-xl px-4 py-3 text-xs font-mono font-bold uppercase"
+                          defaultValue={selectedOrder.trackingCode || ''}
+                        />
+                        <button 
+                          onClick={async () => {
+                             const rcpt = (document.getElementById('seller-input-tracking') as HTMLInputElement)?.value;
+                             if (!rcpt) {
+                                alert('Please enter a tracking number/resi');
+                                return;
+                             }
+                             try {
+                                const response = await fetch(`/api/orders/${selectedOrder.rawId}/ship`, {
+                                   method: 'PATCH',
+                                   headers: { 'Content-Type': 'application/json' },
+                                   body: JSON.stringify({ tracking_number: rcpt })
+                                });
+                                if (response.ok) {
+                                   setSelectedOrder(null);
+                                   fetchOrders();
+                                }
+                             } catch (err) {
+                                console.error(err);
+                             }
+                          }}
+                          className="px-6 py-4 bg-black text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-neutral-800 transition-colors"
+                        >
+                           Ship to Verifier
+                        </button>
+                     </div>
+                  </div>
+               )}
+
+               {selectedOrder.trackingCode && (
+                  <div className="p-8 bg-zinc-50 rounded-[2rem] space-y-2 border border-zinc-100">
+                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Active Waybill (Resi)</p>
+                     <p className="text-sm font-mono font-black uppercase text-black">{selectedOrder.trackingCode}</p>
+                  </div>
+               )}
 
                <div className="space-y-8">
                   <div className="flex items-center space-x-4">

@@ -13,6 +13,11 @@ router.get("/health", (req, res) => {
 router.post("/analyze-category", async (req, res) => {
   try {
     const { name, description } = req.body;
+    const desc = description || "";
+    const words = desc.trim().split(/\s+/).filter(Boolean).length;
+    if (words < 15) {
+      return res.status(400).json({ error: "Product description must be at least 15 words for the AI assistant to predict the category classification." });
+    }
     const categories = await analyzeProductCategory(name, description);
     res.json({ categories });
   } catch (error) {
@@ -95,7 +100,7 @@ router.put("/users/:id", async (req, res) => {
 router.get("/seller/stats", async (req, res) => {
   try {
     const revenueResult = await pool.query("SELECT COALESCE(SUM(total_amount), 0) as revenue FROM orders");
-    const activeProductsResult = await pool.query("SELECT COUNT(*) as count FROM products WHERE status = 'VERIFIED'");
+    const activeProductsResult = await pool.query("SELECT COUNT(*) as count FROM products WHERE status IN ('VERIFIED', 'PENDING')");
     const totalSalesResult = await pool.query("SELECT COUNT(*) as count FROM orders");
     
     // Aggregating monthly sales
@@ -233,8 +238,14 @@ router.get("/products", async (req, res) => {
     
     const whereConditions = [];
     if (status) {
-      whereConditions.push(`status = $${params.length + 1}`);
-      params.push(status);
+      if (status === 'VERIFIED') {
+        whereConditions.push(`status IN ('VERIFIED', 'PENDING')`);
+      } else {
+        whereConditions.push(`status = $${params.length + 1}`);
+        params.push(status);
+      }
+    } else {
+      whereConditions.push(`status != 'REJECTED'`);
     }
     if (condition) {
       whereConditions.push(`condition = $${params.length + 1}`);
@@ -251,6 +262,9 @@ router.get("/products", async (req, res) => {
     
     query += " ORDER BY created_at DESC";
     
+    // Copy where params for count query before adding limit/offset
+    const countParams = [...params];
+    
     if (limit) {
       query += ` LIMIT $${params.length + 1}`;
       params.push(limit);
@@ -265,10 +279,8 @@ router.get("/products", async (req, res) => {
     
     // Get total count for pagination
     let countQuery = "SELECT COUNT(*) FROM products";
-    const countParams = [];
     if (whereConditions.length > 0) {
       countQuery += " WHERE " + whereConditions.join(" AND ");
-      countParams.push(...params.filter((_, i) => i < whereConditions.length));
     }
     const countResult = await pool.query(countQuery, countParams);
 
@@ -278,7 +290,7 @@ router.get("/products", async (req, res) => {
     });
   } catch (error) {
     console.error("Database error:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    res.status(500).json({ error: "Internal Server Error", details: error instanceof Error ? error.message : "Unknown error", stack: error instanceof Error ? error.stack : "" });
   }
 });
 
@@ -316,32 +328,36 @@ router.put("/products/:id", async (req, res) => {
     const { id } = req.params;
     const { name, description, category, price, originalPrice, image, condition, gender, sizes } = req.body;
 
-    // Check current status and sizes to determine if there is stock addition
     const currentProdCheck = await pool.query("SELECT status, sizes FROM products WHERE id = $1", [id]);
     if (currentProdCheck.rows.length === 0) {
       return res.status(404).json({ error: "Product not found" });
     }
-    const currentProduct = currentProdCheck.rows[0];
-    const currentStatus = currentProduct.status || 'PENDING';
 
-    let currentSizes = typeof currentProduct.sizes === 'string' ? JSON.parse(currentProduct.sizes) : currentProduct.sizes;
-    if (!currentSizes) {
-      currentSizes = {};
+    const oldStatus = currentProdCheck.rows[0].status;
+    const oldSizes = currentProdCheck.rows[0].sizes || {};
+
+    const oldSizesMap = new Map();
+    if (oldSizes && typeof oldSizes === "object") {
+      Object.entries(oldSizes).forEach(([sz, stk]) => {
+        oldSizesMap.set(sz, Number(stk) || 0);
+      });
     }
 
-    let hasStockIncrease = false;
-    if (sizes) {
-      for (const sizeKey of Object.keys(sizes)) {
-        const newStock = Number(sizes[sizeKey]) || 0;
-        const oldStock = Number(currentSizes[sizeKey]) || 0;
+    let stockAdded = false;
+    if (sizes && typeof sizes === "object") {
+      Object.entries(sizes).forEach(([sz, stk]) => {
+        const oldStock = oldSizesMap.get(sz) || 0;
+        const newStock = Number(stk) || 0;
         if (newStock > oldStock) {
-          hasStockIncrease = true;
-          break;
+          stockAdded = true;
         }
-      }
+      });
     }
 
-    const nextStatus = hasStockIncrease ? 'PENDING' : currentStatus;
+    let nextStatus = oldStatus;
+    if (stockAdded) {
+      nextStatus = "PENDING";
+    }
 
     const result = await pool.query(
       "UPDATE products SET name = $1, description = $2, category = $3, price = $4, original_price = $5, image = $6, condition = $7, gender = $8, sizes = $9, status = $10 WHERE id = $11 RETURNING *, original_price as \"originalPrice\"",
@@ -368,11 +384,11 @@ router.delete("/products/:id", async (req, res) => {
 // Orders
 router.get("/orders", async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit as string) || 10;
+    const limit = parseInt(req.query.limit as string) || 120;
     const offset = parseInt(req.query.offset as string) || 0;
 
     const result = await pool.query(`
-      SELECT o.*, p.name as product_name, p.image as product_image 
+      SELECT o.*, p.name as product_name, p.image as product_image, p.category, p.condition, p.sizes as product_sizes, p.id as product_internal_id 
       FROM orders o 
       JOIN products p ON o.product_id = p.id 
       ORDER BY o.created_at DESC
@@ -408,7 +424,7 @@ router.post("/orders", async (req, res) => {
       const productCheck = await client.query("SELECT status, sizes FROM products WHERE id = $1 FOR UPDATE", [product_id]);
       const product = productCheck.rows[0];
 
-      if (!product || product.status !== 'VERIFIED') {
+      if (!product || (product.status !== 'VERIFIED' && product.status !== 'PENDING')) {
         throw new Error("Product no longer available");
       }
 
@@ -448,6 +464,64 @@ router.post("/orders", async (req, res) => {
   } catch (error) {
     console.error("Failed to place order:", error);
     res.status(500).json({ error: error instanceof Error ? error.message : "Failed to place order" });
+  }
+});
+
+router.patch("/orders/:id/ship", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { tracking_number } = req.body;
+    const result = await pool.query(
+      "UPDATE orders SET tracking_number = $1, status = 'IN_VERIFICATION' WHERE id = $2 RETURNING *",
+      [tracking_number, id]
+    );
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error("Failed to ship order to verifier:", error);
+    res.status(500).json({ error: "Failed to ship order to verifier" });
+  }
+});
+
+router.patch("/orders/:id/verify", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const { status, notes } = req.body; // 'AUTHENTIC' or 'COUNTERFEIT'
+    const nextOrderStatus = status === 'AUTHENTIC' ? 'SHIPPED' : 'REJECTED';
+    
+    await client.query("BEGIN");
+    
+    // Update order status
+    const orderResult = await client.query(
+      "UPDATE orders SET status = $1, verification_notes = $2 WHERE id = $3 RETURNING *",
+      [nextOrderStatus, notes || null, id]
+    );
+    
+    const order = orderResult.rows[0];
+    if (order && order.product_id) {
+      if (status === 'AUTHENTIC') {
+        // Change product status to 'VERIFIED'
+        await client.query(
+          "UPDATE products SET status = 'VERIFIED' WHERE id = $1",
+          [order.product_id]
+        );
+      } else if (status === 'COUNTERFEIT') {
+        // Change product status to 'REJECTED'
+        await client.query(
+          "UPDATE products SET status = 'REJECTED' WHERE id = $1",
+          [order.product_id]
+        );
+      }
+    }
+    
+    await client.query("COMMIT");
+    res.json(order || { message: "No order found to verify" });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Failed to verify order:", error);
+    res.status(500).json({ error: "Failed to verify order" });
+  } finally {
+    client.release();
   }
 });
 
