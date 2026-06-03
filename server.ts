@@ -6,22 +6,19 @@ import { createServer as createViteServer } from "vite";
 import backendRoutes from "./backend/routes";
 import { initDb } from "./database/init";
 
-// Use process.cwd() for path resolution to be compatible with both ESM and CJS
 const __dirname = process.cwd();
 
 async function startServer() {
-  // Initialize Database before starting app
   await initDb();
 
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: "50mb" }));
+  app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-  // Use Modular Backend Routes
   app.use("/api", backendRoutes);
 
-  // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const rootsToTry = [
       path.join(process.cwd(), "front-end"),
@@ -44,7 +41,6 @@ async function startServer() {
       console.warn("CRITICAL WARNING: index.html NOT found!");
       console.warn("CWD:", process.cwd());
       
-      // Last resort search
       const tryFindIndex = (dir: string, depth = 0): string | null => {
         if (depth > 1) return null;
         try {
@@ -75,7 +71,6 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    // Production static files
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {

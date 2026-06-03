@@ -27,7 +27,7 @@ export default function Home() {
 
   React.useEffect(() => {
     setIsLoading(true);
-    fetch('/api/products?status=VERIFIED')
+    fetch('/api/products')
       .then(res => res.json())
       .then(data => {
         setProducts(data.products || []);
@@ -123,7 +123,7 @@ export default function Home() {
                     )}
                   </div>
                   <div className="space-y-2 px-1">
-                    <div className="sleek-label opacity-60">Verified Item</div>
+                    <div className="sleek-label opacity-60">{product.brand || 'Clovet'}</div>
                     <h3 className="font-bold text-lg tracking-tight group-hover:text-gray-600 transition-colors uppercase">{product.name}</h3>
                     <div className="flex items-center space-x-3">
                       <p className="font-black text-xl">IDR {Number(product.price).toLocaleString()}</p>
@@ -136,7 +136,7 @@ export default function Home() {
               ))
             ) : (
               <div className="w-full text-center py-32 bg-white/50 rounded-[3rem] border border-dashed border-gray-200">
-                 <p className="text-[10px] font-black uppercase tracking-[0.5em] text-gray-300 mb-4">No verified inventory found</p>
+                 <p className="text-[10px] font-black uppercase tracking-[0.5em] text-gray-300 mb-4">No products found in inventory</p>
                  <Link to="/listing" className="text-[10px] font-black uppercase tracking-widest text-[#556B2F] border-b-2 border-[#556B2F]">Browse All Products</Link>
               </div>
             )}
@@ -241,7 +241,7 @@ export default function Home() {
                         <img src={product.image} alt={product.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                       </div>
                       <div className="space-y-2">
-                        <div className="sleek-label opacity-60">Authentic</div>
+                        <div className="sleek-label opacity-60">Clovet</div>
                         <h3 className="font-bold text-base tracking-tight uppercase group-hover:text-gray-500 transition-colors">{product.name}</h3>
                         <div className="flex items-center space-x-2">
                           <p className="font-black text-lg">IDR {Number(product.price).toLocaleString()}</p>

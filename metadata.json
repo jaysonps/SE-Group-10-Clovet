@@ -1,8 +1,0 @@
-{
-  "name": "Clovet",
-  "description": "Premium fashion marketplace with escrow and authentication.",
-  "requestFramePermissions": [],
-  "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
-}
