@@ -96,11 +96,11 @@ export default function VerifierDashboard() {
     }
   };
 
-  const handleVerdict = async (id: string, verdict: 'AUTHENTIC' | 'COUNTERFEIT', notes: string) => {
+  const handleVerdict = async (id: string, verdict: 'AUTHENTIC' | 'COUNTERFEIT', notes: string, evidenceImage?: string) => {
     const res = await fetch(`/api/orders/${id}/verify`, {
       method: 'PATCH',
       headers: authHeaders,
-      body: JSON.stringify({ status: verdict, notes }),
+      body: JSON.stringify({ status: verdict, notes, evidence_image: evidenceImage || '' }),
     });
     if (res.ok) {
       setQueue(prev => prev.map(item =>
@@ -368,7 +368,7 @@ function InspectionPanel({
 }: {
   task: QueueItem;
   onBack: () => void;
-  onVerdict: (id: string, verdict: 'AUTHENTIC' | 'COUNTERFEIT', notes: string) => Promise<void>;
+  onVerdict: (id: string, verdict: 'AUTHENTIC' | 'COUNTERFEIT', notes: string, evidenceImage?: string) => Promise<void>;
 }) {
   const isReviewMode = task.status !== 'WAITING';
 
@@ -381,6 +381,7 @@ function InspectionPanel({
   const [rejectReason,     setRejectReason]     = useState('');
   const [showEvidenceField, setShowEvidenceField] = useState(false);
   const [isSubmitting,      setIsSubmitting]      = useState(false);
+  const [proofFiles,        setProofFiles]        = useState<File[]>([]);
 
   // Sync when task prop changes (e.g. after verdict applied)
   React.useEffect(() => {
@@ -399,7 +400,16 @@ function InspectionPanel({
   const submit = async (verdict: 'AUTHENTIC' | 'COUNTERFEIT') => {
     if (isSubmitting) return;
     setIsSubmitting(true);
-    await onVerdict(task.id, verdict, rejectReason);
+    // Convert proof images to base64 for the API (evidence_image field)
+    let evidenceImage = '';
+    if (verdict === 'COUNTERFEIT' && proofFiles.length > 0) {
+      evidenceImage = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(proofFiles[0]);
+      });
+    }
+    await onVerdict(task.id, verdict, rejectReason, evidenceImage);
     setIsSubmitting(false);
     onBack();
   };
@@ -593,9 +603,45 @@ function InspectionPanel({
                         onChange={e => setRejectReason(e.target.value)}
                         className="w-full h-28 bg-red-50 border border-red-100 rounded-2xl p-5 outline-none focus:ring-2 focus:ring-red-500 font-bold text-xs tracking-tight placeholder:text-red-200 resize-none leading-relaxed"
                       />
-                      <div className="aspect-video border-2 border-dashed border-red-100 rounded-2xl flex flex-col items-center justify-center text-red-200 gap-2">
-                        <Eye size={22} />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Upload Proof Photos</span>
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="proof-upload"
+                          className="flex flex-col items-center justify-center gap-2 aspect-video border-2 border-dashed border-red-200 rounded-2xl cursor-pointer hover:bg-red-50 transition-all text-red-300 hover:text-red-400"
+                        >
+                          <Eye size={22} />
+                          <span className="text-[10px] font-black uppercase tracking-widest">
+                            {proofFiles.length > 0 ? `${proofFiles.length} photo(s) selected` : 'Upload Proof Photos'}
+                          </span>
+                          <span className="text-[9px] font-bold uppercase tracking-widest opacity-60">JPG / PNG · Max 5MB each</span>
+                        </label>
+                        <input
+                          id="proof-upload"
+                          type="file"
+                          accept="image/jpeg,image/jpg,image/png"
+                          multiple
+                          className="hidden"
+                          onChange={e => {
+                            const files = Array.from(e.target.files || []).filter(f => f.size <= 5 * 1024 * 1024);
+                            setProofFiles(files);
+                          }}
+                        />
+                        {proofFiles.length > 0 && (
+                          <div className="grid grid-cols-3 gap-2 mt-2">
+                            {proofFiles.map((f, i) => (
+                              <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-red-100 bg-red-50">
+                                <img
+                                  src={URL.createObjectURL(f)}
+                                  alt={`proof-${i}`}
+                                  className="w-full h-full object-cover"
+                                />
+                                <button
+                                  onClick={() => setProofFiles(prev => prev.filter((_, idx) => idx !== i))}
+                                  className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-black hover:bg-red-600"
+                                >✕</button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </motion.div>
                   )}
