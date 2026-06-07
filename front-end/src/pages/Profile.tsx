@@ -664,10 +664,6 @@ export default function Profile() {
                                                >
                                                  {order.reviewed ? 'View Review' : 'Give Review'}
                                                </button>
-                                             ) : (order.status.toLowerCase() === 'shipped' || order.status.toLowerCase() === 'delivered') ? (
-                                               <span className="text-[10px] font-black uppercase tracking-widest text-gray-300 cursor-not-allowed">
-                                                 Review Locked (Pending Completion)
-                                               </span>
                                              ) : null}
                                          </div>
                                       </div>
